@@ -41,7 +41,8 @@ class AtomsDataset(Dataset, abc.ABC):
             'forces'      : (len(atoms), dim),
             'virial'      : (1, dim, dim),
             'dipole'      : (1, dim),
-            'polarizability': (1, dim, dim)
+            'polarizability': (1, dim, dim),
+            'spin_torques'      : (len(atoms), dim),  
         }
         for key in properties:
             if key in atoms.info:
@@ -50,6 +51,17 @@ class AtomsDataset(Dataset, abc.ABC):
             else:
                 data[key + '_t'] = torch.zeros(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
                 data[key + '_weight'] = torch.zeros(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
+
+        if 'spin_torques' in properties:
+            if 'spin_torques' in atoms.info:
+                data['spin'] = torch.tensor(atoms.info['spin'], dtype=EnvPara.FLOAT_PRECISION)
+                has_spin = torch.norm(data['spin'], dim=1) > 0.5
+                data['spin_torques_t'] = torch.tensor(atoms.info['spin_torques'], dtype=EnvPara.FLOAT_PRECISION).reshape(len(atoms), dim)
+                data['spin_torques_weight'] = torch.zeros((len(atoms), dim), dtype=EnvPara.FLOAT_PRECISION)
+                data['spin_torques_weight'][has_spin, :] = 1.
+            else:
+                data['spin_torques_t'] = torch.zeros((len(atoms), dim), dtype=EnvPara.FLOAT_PRECISION)
+                data['spin_torques_weight'] = torch.zeros((len(atoms), dim), dtype=EnvPara.FLOAT_PRECISION)
         return data
 
     def __init__(self,

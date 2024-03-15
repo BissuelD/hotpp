@@ -86,7 +86,7 @@ class LitAtomicModule(pl.LightningModule):
             else:
                 if "embedding" in name:
                     embedding[name] = param
-                if "readout" in name:
+                elif "readout" in name:
                     readout[name] = param
 
         param_options = dict(

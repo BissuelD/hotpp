@@ -15,7 +15,7 @@ from ..layer.radial import *
 from ..data import LitAtomsDataset
 
 
-torch.set_float32_matmul_precision("high")
+# torch.set_float32_matmul_precision("high")
 log = logging.getLogger(__name__)
 
 
@@ -125,7 +125,7 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
     model_dict = p_dict['Model']
     target = p_dict['Train']['targetProp']
     target_way = {}
-    if ("energy" in target) or ("forces" in target) or ("virial" in target):
+    if ("energy" in target) or ("forces" in target) or ("virial" in target) or ("spin_torques" in target):
         target_way["site_energy"] = 0
     if "dipole" in target:
         target_way["dipole"] = 1
@@ -152,7 +152,8 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
                     std=std,
                     norm_factor=n_neighbor,
                     mode=model_dict['mode'],
-                    bilinear=model_dict['bilinear']).to(p_dict['device'])
+                    bilinear=model_dict['bilinear'],
+                    spin=model_dict['spin']).to(p_dict['device'])
     assert isinstance(model_dict['Repulsion'], int), "Repulsion should be int!"
     if model_dict['Repulsion'] > 0:
         model = MultiAtomicModule({'main': model, 
@@ -201,6 +202,7 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
                 "activateFn": "silu",
             },
             "Repulsion": 0,
+            "spin": False,
         },
         "Train": {
             "maxEpoch": 10000,

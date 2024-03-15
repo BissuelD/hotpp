@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from .base import AtomicModule
 from ..layer import SOnEquivalentLayer, EmbeddingLayer, RadialLayer, ReadoutLayer, CutoffLayer
+from ..layer.rotate import E3RotateLayer
 from ..utils import expand_para, find_distances
 
 # TODO: std and mean should be move to data prepare?
@@ -26,12 +27,16 @@ class MiaoNet(AtomicModule):
                  norm_factor     : float=1.,
                  mode            : str='normal',
                  bilinear        : bool=False,
+                 spin            : bool=False,
                  ):
         super().__init__()
         self.register_buffer("mean", torch.tensor(mean).float())
         self.register_buffer("std", torch.tensor(std).float())
         self.register_buffer("norm_factor", torch.tensor(norm_factor).float())
+        self.register_buffer("spin", torch.tensor(spin).bool())
         self.embedding_layer = embedding_layer
+        if self.spin:
+            self.spin_embedding_layer = E3RotateLayer(embedding_layer.n_channel)
         max_r_way = expand_para(max_r_way, n_layers)
         max_out_way = expand_para(max_out_way, n_layers)
         max_in_way = [0] + max_out_way[1:]
@@ -59,6 +64,8 @@ class MiaoNet(AtomicModule):
         find_distances(batch_data)
         emb = self.embedding_layer(batch_data=batch_data)
         output_tensors = {0: emb}
+        if self.spin:
+            output_tensors[1] = self.spin_embedding_layer(batch_data['spin'])
         for son_equivalent_layer in self.son_equivalent_layers:
             output_tensors = son_equivalent_layer(output_tensors, batch_data)
         output_tensors = self.readout_layer(output_tensors, emb)
