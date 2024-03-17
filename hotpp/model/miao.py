@@ -37,9 +37,12 @@ class MiaoNet(AtomicModule):
         self.embedding_layer = embedding_layer
         if self.spin:
             self.spin_embedding_layer = TensorLinear(1, embedding_layer.n_channel, False)
+            max_in_way = [1]
+        else:
+            max_in_way = [0]
         max_r_way = expand_para(max_r_way, n_layers)
         max_out_way = expand_para(max_out_way, n_layers)
-        max_in_way = [0] + max_out_way[1:]
+        max_in_way += max_out_way[1:]
         hidden_nodes = [embedding_layer.n_channel] + expand_para(output_dim, n_layers)
         self.son_equivalent_layers = nn.ModuleList([
             SOnEquivalentLayer(activate_fn=activate_fn,
@@ -65,7 +68,8 @@ class MiaoNet(AtomicModule):
         emb = self.embedding_layer(batch_data=batch_data)
         output_tensors = {0: emb}
         if self.spin:
-            output_tensors[1] = self.spin_embedding_layer(batch_data['spin'].unsqueeze(1))
+            batch_data['hehe'] = self.spin_embedding_layer(batch_data['spin'].unsqueeze(1))
+            output_tensors[1] = batch_data['hehe']
         for son_equivalent_layer in self.son_equivalent_layers:
             output_tensors = son_equivalent_layer(output_tensors, batch_data)
         output_tensors = self.readout_layer(output_tensors, emb)

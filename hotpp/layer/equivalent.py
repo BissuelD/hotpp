@@ -9,7 +9,7 @@ from torch import nn
 from typing import Dict, Callable, Union, Optional
 from .base import RadialLayer, CutoffLayer
 from .activate import TensorActivateDict
-from ..utils import find_distances, find_moment, _scatter_add, _aggregate, expand_to
+from ..utils import find_distances, find_moment, _scatter_add, _aggregate, expand_to, _aggregate_tmp
 
 
 # input_tensors be like:
@@ -195,6 +195,42 @@ class TensorAggregateLayer(nn.Module):
 
         return output_tensors
 
+class SelfTensorAggregateLayer(nn.Module):
+    def __init__(self,
+                 max_in_way     : int=2,
+                 max_out_way    : int=2,
+                 max_r_way      : int=2,
+                 ) -> None:
+        super().__init__()
+        # get all possible "i, r, o" combinations
+        self.all_combinations = {}
+        for in_way in range(max_in_way + 1):
+            for r_way in range(max_r_way + 1):
+                for z_way in range(min(in_way, r_way) + 1):
+                    out_way = in_way + r_way - 2 * z_way
+                    if out_way <= max_out_way:
+                        comb = (in_way, r_way, out_way)
+                        self.all_combinations[str(comb)] = comb
+
+    def forward(self,
+                input_tensors : Dict[int, torch.Tensor],
+                batch_data    : Dict[str, torch.Tensor],
+                ) -> Dict[int, torch.Tensor]:
+        # These 3 rows are required by torch script
+        output_tensors = torch.jit.annotate(Dict[int, torch.Tensor], {})
+        for comb, rbf_mixing in self.all_combinations.items():
+            in_way, r_way, out_way = self.all_combinations[comb]
+            if r_way == 1:
+                #print(in_way, r_way, out_way, input_tensors[in_way].shape, batch_data['spin'].shape)
+                output_tensor = _aggregate_tmp(input_tensors[in_way], 
+                                               batch_data['hehe'], 
+                                               in_way, r_way, out_way)
+                if out_way not in output_tensors:
+                    output_tensors[out_way] = output_tensor
+                else:
+                    output_tensors[out_way] += output_tensor
+        return output_tensors
+
 
 class SelfInteractionLayer(nn.Module):
     def __init__(self,
@@ -276,6 +312,9 @@ class SOnEquivalentLayer(nn.Module):
         self.non_linear = NonLinearLayer(activate_fn=activate_fn,
                                          max_in_way=max_out_way,
                                          input_dim=output_dim)
+        self.self_aggregate = SelfTensorAggregateLayer(max_in_way=max_out_way, 
+                                                       max_r_way=max_out_way,
+                                                       max_out_way=max_out_way)
 
     def forward(self,
                 input_tensors : Dict[int, torch.Tensor],
@@ -298,8 +337,10 @@ class SOnEquivalentLayer(nn.Module):
 
     def update(self,
                input_tensors : Dict[int, torch.Tensor],
+               batch_data    : Dict[str, torch.Tensor],
                ) -> Dict[int, torch.Tensor]:
-        output_tensors = self.self_interact(input_tensors)
+        output_tensors = self.self_aggregate(input_tensors, batch_data)
+        output_tensors = self.self_interact(output_tensors)
         output_tensors = self.non_linear(output_tensors)
         # resnet
         for r_way in input_tensors.keys():
@@ -311,5 +352,5 @@ class SOnEquivalentLayer(nn.Module):
                   batch_data : Dict[str, torch.Tensor],
                   ) -> Dict[int, torch.Tensor]:
         output_tensors = self.message_and_aggregate(input_tensors, batch_data)
-        output_tensors = self.update(output_tensors)
+        output_tensors = self.update(output_tensors, batch_data)
         return output_tensors

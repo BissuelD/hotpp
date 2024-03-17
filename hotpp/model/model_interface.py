@@ -17,7 +17,7 @@ class LitAtomicModule(pl.LightningModule):
         self.model = model
         self.loss_calculator = self.get_loss_calculator()
 
-        grad_prop = set(['forces', 'virial', 'stress'])
+        grad_prop = set(['forces', 'virial', 'stress', 'spin_torques'])
         self.required_derivatives = len(grad_prop.intersection(self.p_dict["Train"]['targetProp'])) > 0
         # self.save_hyperparameters(ignore=['model'])
 

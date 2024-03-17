@@ -194,3 +194,20 @@ def _aggregate(moment_tensor: torch.Tensor,
         sum_axis = [i for i in range(in_way - coupling_way + 2, in_way + 2)]
         output_tensor = torch.sum(output_tensor, dim=sum_axis)
     return output_tensor
+
+@torch.jit.script
+def _aggregate_tmp(t1: torch.Tensor,
+                   t2: torch.Tensor,
+                   way1 : int,
+                   way2 : int,
+                   out_way: int
+                   ) -> torch.Tensor:
+    coupling_way = (way1 + way2 - out_way) // 2
+    n_way = way1 + way2 - coupling_way + 2
+    t1  = expand_to(t1, n_way, dim=-1)
+    t2 = expand_to(t2, n_way, dim=2)
+    output_tensor = t1 * t2
+    if coupling_way > 0:
+        sum_axis = [i for i in range(way1 - coupling_way + 2, way1 + 2)]
+        output_tensor = torch.sum(output_tensor, dim=sum_axis)
+    return output_tensor
