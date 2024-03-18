@@ -153,13 +153,28 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
                     norm_factor=n_neighbor,
                     mode=model_dict['mode'],
                     bilinear=model_dict['bilinear'],
-                    spin=model_dict['spin']).to(p_dict['device'])
+                    ).to(p_dict['device'])
     assert isinstance(model_dict['Repulsion'], int), "Repulsion should be int!"
     if model_dict['Repulsion'] > 0:
         model = MultiAtomicModule({'main': model, 
                                    'repulsion': TwoBody(embedding_layer=emb,
                                                         cutoff_fn=cut_fn,
                                                         k_max=model_dict['Repulsion'])})
+    if model_dict['spin']:
+        from hotpp.model.spin import SpinMiaoNet
+        spin_model = SpinMiaoNet(radial_fn=radial_fn, 
+                                 n_layers=model_dict['nLayer'],
+                                 max_r_way=model_dict['maxRWay'],
+                                 output_dim=model_dict['nHidden'],
+                                 activate_fn=model_dict['activateFn'],
+                                 target_way=target_way,
+                                 mean=mean,
+                                 std=std,
+                                 norm_factor=n_neighbor,
+                                 mode=model_dict['mode'],
+                                 bilinear=model_dict['bilinear'],)
+        model = MultiAtomicModule({'main': model, 
+                                   'spin': spin_model})
     return model
 
 
