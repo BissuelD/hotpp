@@ -24,7 +24,18 @@ class AtomsDataset(Dataset, abc.ABC):
             "n_atoms": torch.tensor([len(atoms)], dtype=torch.long),
             "offset": torch.tensor(offset, dtype=EnvPara.FLOAT_PRECISION),
         }
-
+        if 'energy' in properties:
+            if 'energy' not in atoms.info:
+                try:
+                    atoms.info['energy'] = atoms.get_potential_energy()
+                except:
+                    raise Exception("Energy not found in atoms!")
+        if 'forces' in properties:
+            if 'forces' not in atoms.info:
+                try:
+                    atoms.info['forces'] = atoms.get_forces()
+                except:
+                    raise Exception("Forces not found in atoms!")
         if 'virial' in properties:
             data["scaling"] = torch.eye(dim, dtype=EnvPara.FLOAT_PRECISION).view(1, dim, dim)
             if 'stress' in atoms.info and 'virial' not in atoms.info:
@@ -46,7 +57,10 @@ class AtomsDataset(Dataset, abc.ABC):
         for key in properties:
             if key in atoms.info:
                 data[key + '_t'] = torch.tensor(atoms.info[key], dtype=EnvPara.FLOAT_PRECISION).reshape(padding_shape[key])
-                data[key + '_weight'] = torch.ones(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
+                if key + 'weight' in atoms.info:
+                    data[key + '_weight'] = atoms.info[key + '_weight']
+                else:
+                    data[key + '_weight'] = torch.ones(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
             else:
                 data[key + '_t'] = torch.zeros(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
                 data[key + '_weight'] = torch.zeros(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)

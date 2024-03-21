@@ -59,7 +59,7 @@ class MiaoCalculator(Calculator):
         if "stress" in properties:
             virial = data["virial_p"].detach().cpu().numpy().reshape(-1)
             if sum(atoms.get_pbc()) > 0:
-                stress = 0.5 * (virial.copy() + virial.copy().T) / atoms.get_volume()
+                stress = -0.5 * (virial.copy() + virial.copy().T) / atoms.get_volume()
                 self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
             else:
                 raise PropertyNotImplementedError
