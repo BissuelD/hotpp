@@ -58,7 +58,7 @@ class AtomsDataset(Dataset, abc.ABC):
             if key in atoms.info:
                 data[key + '_t'] = torch.tensor(atoms.info[key], dtype=EnvPara.FLOAT_PRECISION).reshape(padding_shape[key])
                 if key + 'weight' in atoms.info:
-                    data[key + '_weight'] = atoms.info[key + '_weight']
+                    data[key + '_weight'] = torch.tensor(atoms.info[key + '_weight'], dtype=EnvPara.FLOAT_PRECISION).reshape(padding_shape[key])
                 else:
                     data[key + '_weight'] = torch.ones(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
             else:

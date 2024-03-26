@@ -37,6 +37,38 @@ class SaveModelCheckpoint(ModelCheckpoint):
                 os.remove(modelpath)
 
 
+class LogAllLoss(pl.Callback):
+
+    def __init__(self, properties) -> None:
+        super().__init__()
+        self.train_loss = {p: [] for p in properties}
+        self.train_loss['total'] = []
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if trainer.global_rank == 0:
+            loss_metrics = trainer.callback_metrics
+            self.train_loss['total'].append(loss_metrics['train_loss'].detach().cpu().numpy())
+            for prop in pl_module.p_dict["Train"]['targetProp']:
+                prop = "forces" if prop == "direct_forces" else prop
+                self.train_loss[prop].append(loss_metrics[f'train_{prop}'].detach().cpu().numpy())
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        if trainer.global_rank == 0:
+            epoch = trainer.current_epoch
+            lr = trainer.optimizers[0].param_groups[0]["lr"]
+            loss_metrics = trainer.callback_metrics
+            train_loss = np.mean(self.train_loss['total'])
+            val_loss = loss_metrics['val_loss'].detach().cpu().numpy()
+            content = f"{epoch:^10}|{lr:^10.2e}|{train_loss:^10.4f}/{val_loss:^10.4f}"
+            for prop in pl_module.p_dict["Train"]['targetProp']:
+                prop = "forces" if prop == "direct_forces" else prop
+                train_prop_loss = np.mean(self.train_loss[prop])
+                val_prop_loss = loss_metrics[f'val_{prop}'].detach().cpu().numpy()
+                content += f"|{train_prop_loss:^10.4f}/{val_prop_loss:^10.4f}"
+            log.info(content)
+            for prop in self.train_loss:
+                self.train_loss[prop] = []
+
 def update_dict(d1, d2):
     for key in d2:
         if key in d1 and isinstance(d1[key], dict):
@@ -264,7 +296,8 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
             save_top_k=5,
             monitor="val_loss"
         ),
-        LearningRateMonitor()
+        LearningRateMonitor(),
+        LogAllLoss(p_dict["Train"]['targetProp']),
     ]
     trainer = pl.Trainer(
         logger=logger,
@@ -278,6 +311,10 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
         check_val_every_n_epoch=p_dict["Train"]["evalEpochInterval"],
         gradient_clip_val=p_dict["Train"]["gradClip"],
         )
+    content = f"{'epoch':^10}|{'lr':^10}|{'total':^21}"
+    for prop in p_dict["Train"]['targetProp']:
+        content += f"|{prop:^21}"
+    log.info(content)
     if load_checkpoint is not None:
         log.info(f"Load checkpoints from {load_checkpoint}")
         trainer.fit(lit_model, datamodule=dataset, ckpt_path=load_checkpoint)
