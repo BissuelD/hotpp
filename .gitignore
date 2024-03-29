@@ -86,6 +86,7 @@ docs/source/
 !docs/source/conf.py
 !docs/source/index.rst
 !docs/source/install.rst
+!docs/source/examples.rst
 docs/html/
 # docs/source/auto_examples/
 
