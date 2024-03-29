@@ -15,5 +15,6 @@ equivalence maintenance.
    :maxdepth: 2
    :caption: Contents:
 
-   install
-   hotpp
+   Install
+   Examples
+   Hotpp

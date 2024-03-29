@@ -29,22 +29,28 @@ class AtomsDataset(Dataset, abc.ABC):
                 try:
                     atoms.info['energy'] = atoms.get_potential_energy()
                 except:
-                    raise Exception("Energy not found in atoms!")
+                    pass
         if 'forces' in properties:
             if 'forces' not in atoms.info:
                 try:
                     atoms.info['forces'] = atoms.get_forces()
                 except:
-                    raise Exception("Forces not found in atoms!")
+                    pass
         if 'virial' in properties:
             data["scaling"] = torch.eye(dim, dtype=EnvPara.FLOAT_PRECISION).view(1, dim, dim)
-            if 'stress' in atoms.info and 'virial' not in atoms.info:
-                stress = np.array(atoms.info['stress'])
-                if stress.shape == (6,):
-                    stress = np.array([[stress[0], stress[5], stress[4]],
-                                       [stress[5], stress[1], stress[3]],
-                                       [stress[4], stress[3], stress[2]]])
-                atoms.info['virial'] = -atoms.get_volume() * stress
+            if 'virial' not in atoms.info:
+                if 'stress' not in atoms.info:
+                    try:
+                        atoms.info['stress'] = atoms.get_stress()
+                    except:
+                        pass
+                if 'stress' in atoms.info:
+                    stress = np.array(atoms.info['stress'])
+                    if stress.shape == (6,):
+                        stress = np.array([[stress[0], stress[5], stress[4]],
+                                        [stress[5], stress[1], stress[3]],
+                                        [stress[4], stress[3], stress[2]]])
+                    atoms.info['virial'] = -atoms.get_volume() * stress
 
         padding_shape = {
             'site_energy' : (len(atoms)),
