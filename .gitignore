@@ -82,7 +82,7 @@ instance/
 docs/build/
 docs/build.sh
 docs/clean.sh
-docs/source/       
+docs/source/*      
 !docs/source/conf.py
 !docs/source/index.rst
 !docs/source/install.rst
