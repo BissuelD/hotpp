@@ -7,8 +7,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 import torch.nn.functional as F
 from torch.optim.swa_utils import AveragedModel
 from ase.data import atomic_numbers
-from ..utils import setup_seed
-from ..model import MiaoNet, LitAtomicModule, MultiAtomicModule, TwoBody
+from ..utils import setup_seed, expand_para
+from ..model import MiaoNet, MiaoMiaoNet, LitAtomicModule, MultiAtomicModule, TwoBody
 from ..layer.cutoff import *
 from ..layer.embedding import AtomicEmbedding
 from ..layer.radial import *
@@ -191,19 +191,39 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
     cut_fn = get_cutoff(p_dict)
     emb = AtomicEmbedding(elements, model_dict['nEmbedding'])  # only support atomic embedding now
     radial_fn = get_radial(p_dict, cut_fn)
-    model = MiaoNet(embedding_layer=emb,
-                    radial_fn=radial_fn,
-                    n_layers=model_dict['nLayer'],
-                    max_r_way=model_dict['maxRWay'],
-                    max_out_way=model_dict['maxOutWay'],
-                    output_dim=model_dict['nHidden'],
-                    activate_fn=model_dict['activateFn'],
-                    target_way=target_way,
-                    mean=mean,
-                    std=std,
-                    norm_factor=n_neighbor,
-                    mode=model_dict['mode'],
-                    bilinear=model_dict['bilinear']).to(p_dict['device'])
+    max_r_way = expand_para(model_dict['maxRWay'], model_dict['nLayer'])
+    max_out_way = expand_para(model_dict['maxOutWay'], model_dict['nLayer'])
+    output_dim = expand_para(model_dict['nHidden'], model_dict['nLayer'])
+    max_n_body = expand_para(model_dict['maxNBody'], model_dict['nLayer'])
+    if model_dict['net'] == 'miao':
+        model = MiaoNet(embedding_layer=emb,
+                        radial_fn=radial_fn,
+                        n_layers=model_dict['nLayer'],
+                        max_r_way=max_r_way,
+                        max_out_way=max_out_way,
+                        output_dim=output_dim,
+                        activate_fn=model_dict['activateFn'],
+                        target_way=target_way,
+                        mean=mean,
+                        std=std,
+                        norm_factor=n_neighbor,
+                        mode=model_dict['mode'],
+                        bilinear=model_dict['bilinear']).to(p_dict['device'])
+    elif model_dict['net'] == 'miaomiao':
+        model = MiaoMiaoNet(embedding_layer=emb,
+                        radial_fn=radial_fn,
+                        n_layers=model_dict['nLayer'],
+                        max_r_way=max_r_way,
+                        max_out_way=max_out_way,
+                        max_n_body=max_n_body,
+                        output_dim=output_dim,
+                        activate_fn=model_dict['activateFn'],
+                        target_way=target_way,
+                        mean=mean,
+                        std=std,
+                        norm_factor=n_neighbor,
+                        mode=model_dict['mode'],
+                        bilinear=model_dict['bilinear']).to(p_dict['device'])
     assert isinstance(model_dict['Repulsion'], int), "Repulsion should be int!"
     if model_dict['Repulsion'] > 0:
         model = MultiAtomicModule({'main': model, 
@@ -232,6 +252,7 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
             "pinMemory": False,
         },
         "Model": {
+            "net": "miao",
             "mode": "normal",
             "bilinear": False,
             "activateFn": "silu",
@@ -239,6 +260,7 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
             "nLayer": 5,
             "maxRWay": 2,
             "maxOutWay": 2,
+            "maxNBody": 3,
             "nHidden": 64,
             "targetWay": {0 : 'site_energy'},
             "CutoffLayer": {
