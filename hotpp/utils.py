@@ -211,6 +211,6 @@ def _aggregate_new(T1: torch.Tensor,
     # with (way1 + way2 - coupling_way) dim after n_channel
     # We should sum up (coupling_way) n_dim
     if coupling_way > 0:
-        sum_axis = [i for i in range(way1 - coupling_way + 2, way2 + 2)]
+        sum_axis = [i for i in range(way1 - coupling_way + 2, way1 + 2)]
         output_tensor = torch.sum(output_tensor, dim=sum_axis)
     return output_tensor

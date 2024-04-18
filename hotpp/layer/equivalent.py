@@ -24,7 +24,6 @@ __all__ = ["TensorLinear",
            "TensorAggregateLayer",
            "SelfInteractionLayer",
            "NonLinearLayer",
-           "SOnEquivalentLayer",
            ]
 
 

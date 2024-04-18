@@ -42,12 +42,12 @@ class MultiBodyLayer(nn.Module):
         for n in range(self.max_n_body):
             n_body_tensors[n + 1] = {way: [] for way in range(self.max_in_way + 1)}
             for way1 in range(self.max_in_way + 1):
-                for way2 in range(self.max_in_way + 1):
-                    for way3 in range(abs(way2 - way1), min(self.max_in_way, way1 + way2), 2):
+                for way2 in range(way1, self.max_in_way + 1):
+                    for way3 in range(abs(way2 - way1), min(self.max_in_way, way1 + way2) + 1, 2):
                         for tensor in n_body_tensors[n][way1]:
                             n_body_tensors[n + 1][way3].append(_aggregate_new(tensor, input_tensors[way2], way1, way2, way3))
         for way, linear in enumerate(self.linear_list):
-            tensor = torch.cat([n_body_tensors[n][way] for n in range(self.max_n_body)], dim=1)  # nb, nc*n, nd, nd, ...
+            tensor = torch.cat([t for n in range(self.max_n_body) for t in n_body_tensors[n][way]], dim=1)  # nb, nc*n, nd, nd, ...
             output_tensors[way] = linear(tensor)
         return output_tensors
 
