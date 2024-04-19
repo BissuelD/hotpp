@@ -225,3 +225,31 @@ def _aggregate_new(T1: torch.Tensor,
         sum_axis = [i for i in range(way1 - coupling_way + 2, way1 + 2)]
         output_tensor = torch.sum(output_tensor, dim=sum_axis)
     return output_tensor
+
+        
+def aggregate_tensors_fn(way1 : int,
+                         way2 : int,
+                         way3 : int,
+                         ) -> Callable:
+    coupling_way = (way1 + way2 - way3) // 2
+    n_way = way1 + way2 - coupling_way + 2
+    sum_axis = [i for i in range(way1 - coupling_way + 2, way1 + 2)]
+    def aggregate_tensors(T1: torch.Tensor,
+                          T2: torch.Tensor,
+                          ) -> torch.Tensor:
+        output_tensor = expand_to(T1, n_way, dim=-1) * expand_to(T2, n_way, dim=2)
+        if coupling_way > 0:
+            output_tensor = torch.sum(output_tensor, dim=sum_axis)
+        return output_tensor
+    # return torch.compile(aggregate_tensors)
+    return torch.jit.script(aggregate_tensors)
+
+
+class TensorAggregateOP:
+    oplist = {}
+    @classmethod
+    def set_max(cls, max_way1, max_way2, max_way3):
+        for way1 in range(max_way1 + 1):
+            for way2 in range(max_way2 + 1):
+                for way3 in range(abs(way2 - way1), min(max_way3, way1 + way2) + 1, 2):
+                    cls.oplist[(way1, way2, way3)] = aggregate_tensors_fn(way1, way2, way3)

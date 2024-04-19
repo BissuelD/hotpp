@@ -9,7 +9,7 @@ from torch import nn
 from typing import Dict, Callable, Union, Optional
 from .base import RadialLayer, CutoffLayer
 from .activate import TensorActivateDict
-from ..utils import find_distances, find_moment, _scatter_add, _aggregate, expand_to, _aggregate_new
+from ..utils import find_distances, find_moment, _scatter_add, _aggregate, expand_to, TensorAggregateOP, _aggregate_new
 
 
 # input_tensors be like:
@@ -275,6 +275,11 @@ class TensorProductLayer(nn.Module):
         for x_way, y_way, z_way in self.combinations:
             output_tensor = self.coefficient[(x_way, y_way, z_way)] * \
                 _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
+                # TensorAggregateOP.oplist[(x_way, y_way, z_way)](x[x_way], 
+                #                                                 y[y_way],
+                #                                                 x_way,
+                #                                                 y_way,
+                #                                                 z_way)
             if z_way not in output_tensors:
                 output_tensors[z_way] = output_tensor
             else:
@@ -324,7 +329,14 @@ class MultiBodyLayer(nn.Module):
             n_body_tensors[n + 1] = {way: [] for way in range(self.max_way + 1)}
             for way1, way2, way3 in self.combinations:
                 for tensor in n_body_tensors[n][way1]:
-                    n_body_tensors[n + 1][way3].append(_aggregate_new(tensor, input_tensors[way2], way1, way2, way3))
+                    n_body_tensors[n + 1][way3].append(
+                        _aggregate_new(tensor, input_tensors[way2], way1, way2, way3)
+                        # TensorAggregateOP.oplist[(way1, way2, way3)](tensor, 
+                        #                                              input_tensors[way2],
+                        #                                              way1, 
+                        #                                              way2, 
+                        #                                              way3)
+                        )
         for way, linear in enumerate(self.linear_list):
             tensor = torch.cat([t for n in range(self.max_n_body) for t in n_body_tensors[n][way]], dim=1)  # nb, nc*n, nd, nd, ...
             output_tensors[way] = linear(tensor)
@@ -372,13 +384,16 @@ class GraphConvLayer(nn.Module):
         rbf_ij = self.radial_fn(dij)
         x = {}
         y = {}
+        # for in_way in range(self.max_in_way + 1):
+        #     x[in_way] = torch.cat([node_info[in_way][idx_i],
+        #                            node_info[in_way][idx_j],
+        #                            edge_info[in_way]], dim=1)
+        # x = self.U(x)
         for in_way in range(self.max_in_way + 1):
-            x[in_way] = torch.cat([node_info[in_way][idx_i],
-                                   node_info[in_way][idx_j],
-                                   edge_info[in_way]], dim=1)
+            x[in_way] = node_info[in_way][idx_j]
 
         for r_way, rbf_mixing in enumerate(self.rbf_mixing_list):
             fn = rbf_mixing(rbf_ij)
             y[r_way] = find_moment(batch_data, r_way).unsqueeze(1) * expand_to(fn, n_dim=r_way + 2)
 
-        return self.tensor_product(self.U(x), y)
+        return self.tensor_product(x, y)

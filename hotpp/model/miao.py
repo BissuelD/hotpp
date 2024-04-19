@@ -5,7 +5,7 @@ from torch import nn
 from .base import AtomicModule
 from ..layer import EmbeddingLayer, RadialLayer, ReadoutLayer
 from ..layer.equivalent import SelfInteractionLayer, NonLinearLayer, GraphConvLayer
-from ..utils import find_distances, _scatter_add, res_add
+from ..utils import find_distances, _scatter_add, res_add, TensorAggregateOP
 
 
 class MiaoBlock(nn.Module):
@@ -51,7 +51,8 @@ class MiaoBlock(nn.Module):
                     batch_data  : Dict[str, torch.Tensor],
                     ) -> Dict[int, torch.Tensor]:
         res_info = self.graph_conv(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
-        return res_add(edge_info, res_info)
+        # return res_add(edge_info, res_info)
+        return res_info
 
     def update_node(self,
                     node_info   : Dict[int, torch.Tensor],
@@ -87,6 +88,7 @@ class MiaoNet(AtomicModule):
                  bilinear        : bool=False,
                  ):
         super().__init__()
+
         self.register_buffer("mean", torch.tensor(mean).float())
         self.register_buffer("std", torch.tensor(std).float())
         self.register_buffer("norm_factor", torch.tensor(norm_factor).float())
@@ -111,6 +113,8 @@ class MiaoNet(AtomicModule):
                                           activate_fn=activate_fn,
                                           bilinear=bilinear,
                                           e_dim=embedding_layer.n_channel)
+        
+        TensorAggregateOP.set_max(max(max_in_way), max(max_out_way), max(max_r_way))
 
     def calculate(self,
                   batch_data : Dict[str, torch.Tensor],

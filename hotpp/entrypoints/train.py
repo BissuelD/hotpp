@@ -67,17 +67,18 @@ class LogAllLoss(pl.Callback):
     def on_validation_epoch_end(self, trainer, pl_module):
         if trainer.global_rank == 0:
             if not self.title:
-                content = f"{'epoch':^10}|{'lr':^10}|{'total':^21}"
+                content = f"{'epoch':^10}|{'step':^10}|{'lr':^10}|{'total':^21}"
                 for prop in self.properties:
                     content += f"|{prop:^21}"
                 log.info(content)
                 self.title = True
             epoch = trainer.current_epoch
+            step = trainer.global_step
             lr = trainer.optimizers[0].param_groups[0]["lr"]
             loss_metrics = trainer.callback_metrics
             train_loss = np.mean(self.train_loss['total'])
             val_loss = loss_metrics['val_loss'].detach().cpu().numpy()
-            content = f"{epoch:^10}|{lr:^10.2e}|{train_loss:^10.4f}/{val_loss:^10.4f}"
+            content = f"{epoch:^10}|{step:^10}|{lr:^10.2e}|{train_loss:^10.4f}/{val_loss:^10.4f}"
             for prop in self.properties:
                 prop = "forces" if prop == "direct_forces" else prop
                 train_prop_loss = np.mean(self.train_loss[prop])
