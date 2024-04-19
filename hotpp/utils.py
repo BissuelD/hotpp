@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import itertools
 import torch.nn.functional as F
-from typing import Iterable, Optional, Dict, List, Callable, Tuple
+from typing import Iterable, Optional, Dict, List, Callable, Tuple, Union
 
 
 def setup_seed(seed):
@@ -142,13 +142,24 @@ def get_default_acsf_hyperparameters(rmin, cutoff):
     return etas, rss
 
 
-def expand_para(para: int or List, n: int):
+def expand_para(para: Union[int, List[int]], n: int):
     assert isinstance(para, int) or isinstance(para, list)
     if isinstance(para, int):
         para = [para] * n
     if isinstance(para, list):
         assert len(para) == n
     return para
+
+
+def res_add(t1: Dict[int, torch.Tensor], 
+            t2: Dict[int, torch.Tensor]
+            ) -> Dict[int, torch.Tensor]:
+    for k in t2:
+        if k in t1:
+            t1[k] = t1[k] + t2[k]
+        else:
+            t1[k] = t2[k]
+    return t1
 
 
 @torch.jit.script

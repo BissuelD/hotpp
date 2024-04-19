@@ -1,13 +1,14 @@
+from platform import node
 from typing import Callable, List, Dict, Optional
 import torch
 from torch import nn
 from .base import AtomicModule
 from ..layer import EmbeddingLayer, RadialLayer, ReadoutLayer
-from ..layer.equivalent import TensorAggregateLayer, SimpleTensorAggregateLayer, SelfInteractionLayer, NonLinearLayer
-from ..utils import find_distances
+from ..layer.equivalent import SelfInteractionLayer, NonLinearLayer, GraphConvLayer
+from ..utils import find_distances, _scatter_add, res_add
 
 
-class SOnEquivalentLayer(nn.Module):
+class MiaoBlock(nn.Module):
     def __init__(self,
                  radial_fn      : RadialLayer,
                  max_r_way      : int,
@@ -16,70 +17,54 @@ class SOnEquivalentLayer(nn.Module):
                  input_dim      : int,
                  output_dim     : int,
                  norm_factor    : float=1.0,
-                 activate_fn    : str='jilu',
+                 activate_fn    : str='silu',
                  mode           : str='normal',
                  ) -> None:
         super().__init__()
-        if mode == 'normal':
-            self.tensor_aggregate = TensorAggregateLayer(radial_fn=radial_fn,
-                                                        n_channel=input_dim,
-                                                        max_in_way=max_in_way,
-                                                        max_out_way=max_out_way,
-                                                        max_r_way=max_r_way,
-                                                        norm_factor=norm_factor,)
-        elif mode == 'simple':
-            self.tensor_aggregate = SimpleTensorAggregateLayer(radial_fn=radial_fn,
-                                                               n_channel=input_dim,
-                                                               max_in_way=max_in_way,
-                                                               max_out_way=max_out_way,
-                                                               max_r_way=max_r_way,
-                                                               norm_factor=norm_factor,)
-        # input for SelfInteractionLayer and NonLinearLayer is the output of TensorAggregateLayer
-        # so the max_in_way should equal to max_out_way of TensorAggregateLayer
+        self.graph_conv = GraphConvLayer(radial_fn=radial_fn,
+                                         input_dim=input_dim,
+                                         output_dim=output_dim,
+                                         max_in_way=max_in_way,
+                                         max_out_way=max_out_way,
+                                         max_r_way=max_r_way,)
         self.self_interact = SelfInteractionLayer(input_dim=input_dim,
-                                                  max_in_way=max_out_way,
+                                                  max_way=max_out_way,
                                                   output_dim=output_dim)
         self.non_linear = NonLinearLayer(activate_fn=activate_fn,
-                                         max_in_way=max_out_way,
+                                         max_way=max_out_way,
                                          input_dim=output_dim)
+        self.register_buffer("norm_factor", torch.tensor(norm_factor))
+        self.max_out_way = max_out_way
 
     def forward(self,
-                input_tensors : Dict[int, torch.Tensor],
-                batch_data    : Dict[str, torch.Tensor],
+                node_info    : Dict[int, torch.Tensor],
+                edge_info    : Dict[int, torch.Tensor],
+                batch_data   : Dict[str, torch.Tensor],
                 ) -> Dict[int, torch.Tensor]:
-        input_tensors = self.propagate(input_tensors, batch_data)
-        return input_tensors
+        edge_info = self.update_edge(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        node_info = self.update_node(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        return node_info, edge_info
 
-    # TODO: sparse version
-    def message_and_aggregate(self,
-                              input_tensors : Dict[int, torch.Tensor],
-                              batch_data    : Dict[str, torch.Tensor],
-                              ) -> Dict[int, torch.Tensor]:
-        output_tensors =  self.tensor_aggregate(input_tensors=input_tensors,
-                                                batch_data=batch_data)
-        # resnet
-        for r_way in input_tensors.keys():
-            output_tensors[r_way] += input_tensors[r_way]
-        return output_tensors
+    def update_edge(self,
+                    node_info   : Dict[int, torch.Tensor],
+                    edge_info   : Dict[int, torch.Tensor],
+                    batch_data  : Dict[str, torch.Tensor],
+                    ) -> Dict[int, torch.Tensor]:
+        res_info = self.graph_conv(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        return res_add(edge_info, res_info)
 
-    def update(self,
-               input_tensors : Dict[int, torch.Tensor],
-               ) -> Dict[int, torch.Tensor]:
-        output_tensors = self.self_interact(input_tensors)
-        output_tensors = self.non_linear(output_tensors)
-        # resnet
-        for r_way in input_tensors.keys():
-            output_tensors[r_way] += input_tensors[r_way]
-        return output_tensors
-
-    def propagate(self,
-                  input_tensors : Dict[int, torch.Tensor],
-                  batch_data : Dict[str, torch.Tensor],
-                  ) -> Dict[int, torch.Tensor]:
-        output_tensors = self.message_and_aggregate(input_tensors, batch_data)
-        output_tensors = self.update(output_tensors)
-        return output_tensors
-
+    def update_node(self,
+                    node_info   : Dict[int, torch.Tensor],
+                    edge_info   : Dict[int, torch.Tensor],
+                    batch_data  : Dict[str, torch.Tensor],
+                    ) -> Dict[int, torch.Tensor]:
+        idx_i = batch_data["idx_i"]
+        n_atoms = batch_data['atomic_number'].shape[0]
+        res_info = {}
+        for way in edge_info.keys():
+            res_info[way] = _scatter_add(edge_info[way], idx_i, dim_size=n_atoms) / self.norm_factor
+        res_info = self.non_linear(self.self_interact(res_info))
+        return res_add(node_info, res_info)
 
 class MiaoNet(AtomicModule):
     """
@@ -106,20 +91,21 @@ class MiaoNet(AtomicModule):
         self.register_buffer("std", torch.tensor(std).float())
         self.register_buffer("norm_factor", torch.tensor(norm_factor).float())
         self.embedding_layer = embedding_layer
+        self.radial_fn = radial_fn
 
         max_in_way = [0] + max_out_way[1:]
         hidden_nodes = [embedding_layer.n_channel] + output_dim
-        self.son_equivalent_layers = nn.ModuleList([
-            SOnEquivalentLayer(activate_fn=activate_fn,
-                               radial_fn=radial_fn.replicate(),
-                               # Use factory method, so the radial_fn in each layer are different
-                               max_r_way=max_r_way[i],
-                               max_in_way=max_in_way[i],
-                               max_out_way=max_out_way[i],
-                               input_dim=hidden_nodes[i],
-                               output_dim=hidden_nodes[i + 1],
-                               norm_factor=norm_factor,
-                               mode=mode) for i in range(n_layers)])
+        self.en_equivalent_blocks = nn.ModuleList([
+            MiaoBlock(activate_fn=activate_fn,
+                      radial_fn=radial_fn.replicate(),
+                      # Use factory method, so the radial_fn in each layer are different
+                      max_r_way=max_r_way[i],
+                      max_in_way=max_in_way[i],
+                      max_out_way=max_out_way[i],
+                      input_dim=hidden_nodes[i],
+                      output_dim=hidden_nodes[i + 1],
+                      norm_factor=norm_factor,
+                      mode=mode) for i in range(n_layers)])
         self.readout_layer = ReadoutLayer(n_dim=hidden_nodes[-1],
                                           target_way=target_way,
                                           activate_fn=activate_fn,
@@ -131,10 +117,13 @@ class MiaoNet(AtomicModule):
                   ) -> Dict[str, torch.Tensor]:
         find_distances(batch_data)
         emb = self.embedding_layer(batch_data=batch_data)
-        output_tensors = {0: emb}
-        for son_equivalent_layer in self.son_equivalent_layers:
-            output_tensors = son_equivalent_layer(output_tensors, batch_data)
-        output_tensors = self.readout_layer(output_tensors, emb)
+        _, dij, _ = find_distances(batch_data)
+        rbf = self.radial_fn(dij)
+        node_info = {0: emb}
+        edge_info = {0: rbf}
+        for en_equivalent in self.en_equivalent_blocks:
+            node_info, edge_info = en_equivalent(node_info, edge_info, batch_data)
+        output_tensors = self.readout_layer(node_info, emb)
         if 'site_energy' in output_tensors:
             output_tensors['site_energy'] = output_tensors['site_energy'] * self.std + self.mean
         if 'direct_forces' in output_tensors:

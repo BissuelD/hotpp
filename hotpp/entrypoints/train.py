@@ -73,20 +73,19 @@ class LogAllLoss(pl.Callback):
                 log.info(content)
                 self.title = True
             epoch = trainer.current_epoch
-            if epoch > 0:
-                lr = trainer.optimizers[0].param_groups[0]["lr"]
-                loss_metrics = trainer.callback_metrics
-                train_loss = np.mean(self.train_loss['total'])
-                val_loss = loss_metrics['val_loss'].detach().cpu().numpy()
-                content = f"{epoch:^10}|{lr:^10.2e}|{train_loss:^10.4f}/{val_loss:^10.4f}"
-                for prop in self.properties:
-                    prop = "forces" if prop == "direct_forces" else prop
-                    train_prop_loss = np.mean(self.train_loss[prop])
-                    val_prop_loss = loss_metrics[f'val_{prop}'].detach().cpu().numpy()
-                    content += f"|{train_prop_loss:^10.4f}/{val_prop_loss:^10.4f}"
-                log.info(content)
-                for prop in self.train_loss:
-                    self.train_loss[prop] = []
+            lr = trainer.optimizers[0].param_groups[0]["lr"]
+            loss_metrics = trainer.callback_metrics
+            train_loss = np.mean(self.train_loss['total'])
+            val_loss = loss_metrics['val_loss'].detach().cpu().numpy()
+            content = f"{epoch:^10}|{lr:^10.2e}|{train_loss:^10.4f}/{val_loss:^10.4f}"
+            for prop in self.properties:
+                prop = "forces" if prop == "direct_forces" else prop
+                train_prop_loss = np.mean(self.train_loss[prop])
+                val_prop_loss = loss_metrics[f'val_{prop}'].detach().cpu().numpy()
+                content += f"|{train_prop_loss:^10.4f}/{val_prop_loss:^10.4f}"
+            log.info(content)
+            for prop in self.train_loss:
+                self.train_loss[prop] = []
 
 def update_dict(d1, d2):
     for key in d2:

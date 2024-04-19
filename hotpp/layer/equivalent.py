@@ -9,7 +9,7 @@ from torch import nn
 from typing import Dict, Callable, Union, Optional
 from .base import RadialLayer, CutoffLayer
 from .activate import TensorActivateDict
-from ..utils import find_distances, find_moment, _scatter_add, _aggregate, expand_to
+from ..utils import find_distances, find_moment, _scatter_add, _aggregate, expand_to, _aggregate_new
 
 
 # input_tensors be like:
@@ -24,6 +24,7 @@ __all__ = ["TensorLinear",
            "TensorAggregateLayer",
            "SelfInteractionLayer",
            "NonLinearLayer",
+           "MultiBodyLayer",
            ]
 
 
@@ -42,13 +43,9 @@ class TensorLinear(nn.Module):
     def forward(self,
                 input_tensor: torch.Tensor,   # [n_batch, n_channel, n_dim, n_dim, ...]
                 ):
-        way = len(input_tensor.shape) - 2
-        if way == 0:
-            output_tensor = self.linear(input_tensor)
-        else:
-            input_tensor = torch.transpose(input_tensor, 1, -1)
-            output_tensor = self.linear(input_tensor)
-            output_tensor = torch.transpose(output_tensor, 1, -1)
+        input_tensor = torch.transpose(input_tensor, 1, -1)
+        output_tensor = self.linear(input_tensor)
+        output_tensor = torch.transpose(output_tensor, 1, -1)
         return output_tensor
 
 
@@ -70,15 +67,12 @@ class TensorBiLinear(nn.Module):
                 emb:          torch.Tensor,   # [n_batch, n_emb_channel]
                 ):
         way = len(input_tensor.shape) - 2
-        if way == 0:
-            output_tensor = self.linear(input_tensor, emb)
-        else:
-            input_tensor = torch.transpose(input_tensor, 1, -1)
-            shape = list(input_tensor.shape)
-            shape[-1] = -1
-            emb = expand_to(emb, way + 2, dim=1).expand(shape)
-            output_tensor = self.linear(input_tensor, emb)
-            output_tensor = torch.transpose(output_tensor, 1, -1)
+        input_tensor = torch.transpose(input_tensor, 1, -1)
+        shape = list(input_tensor.shape)
+        shape[-1] = -1
+        emb = expand_to(emb, way + 2, dim=1).expand(shape)
+        output_tensor = self.linear(input_tensor, emb)
+        output_tensor = torch.transpose(output_tensor, 1, -1)
         return output_tensor
 
 
@@ -198,24 +192,23 @@ class TensorAggregateLayer(nn.Module):
 class SelfInteractionLayer(nn.Module):
     def __init__(self,
                  input_dim  : int,
-                 max_in_way : int,
+                 max_way : int,
                  output_dim : int=10,
                  ) -> None:
         super().__init__()
         # only the way 0 can have bias
-        self.linear_interact_list = nn.ModuleList([nn.Linear(input_dim, output_dim)])
-        for _ in range(1, max_in_way + 1):
-            self.linear_interact_list.append(nn.Linear(input_dim, output_dim, bias=False))
+        self.linear_list = nn.ModuleList([
+            nn.Linear(input_dim, output_dim, bias=(way==0)) for way in range(max_way + 1)])
 
     def forward(self,
                 input_tensors : Dict[int, torch.Tensor],
                 ) -> Dict[int, torch.Tensor]:
         output_tensors = torch.jit.annotate(Dict[int, torch.Tensor], {})
-        for way, linear_interact in enumerate(self.linear_interact_list):
+        for way, linear in enumerate(self.linear_list):
             if way in input_tensors:
                 # swap channel axis and the last dim axis
                 input_tensor = torch.transpose(input_tensors[way], 1, -1)
-                output_tensor = linear_interact(input_tensor)
+                output_tensor = linear(input_tensor)
                 output_tensors[way] = torch.transpose(output_tensor, 1, -1)
         return output_tensors
 
@@ -223,12 +216,12 @@ class SelfInteractionLayer(nn.Module):
 # TODO: cat different way together and use Linear layer to got factor of every channel
 class NonLinearLayer(nn.Module):
     def __init__(self,
-                 max_in_way  : int,
+                 max_way  : int,
                  input_dim   : int,
                  activate_fn : str='jilu',
                  ) -> None:
         super().__init__()
-        self.activate_list = nn.ModuleList([TensorActivateDict[activate_fn](input_dim) for _ in range(max_in_way + 1)])
+        self.activate_list = nn.ModuleList([TensorActivateDict[activate_fn](input_dim) for _ in range(max_way + 1)])
 
     def forward(self,
                 input_tensors: Dict[int, torch.Tensor],
@@ -238,3 +231,154 @@ class NonLinearLayer(nn.Module):
             if way in input_tensors:
                 output_tensors[way] = activate(input_tensors[way])
         return output_tensors
+
+# TODO: test two methods:
+# for different path to the same l (l1, l2 -> l and l3, l4 -> l), use coefficient or a large linear layer
+# number parameters: n_path + n_channel * n_channel vs. npath * n_channel * n_channel
+class TensorProductLayer(nn.Module):
+    def __init__(self,
+                 input_dim      : int,
+                 output_dim     : int,
+                 max_x_way      : int=2,
+                 max_y_way      : int=2,
+                 max_z_way      : int=2,
+                 ) -> None:
+        super().__init__()
+        self.combinations = []
+        self.coefficient = {}
+        for x_way in range(max_x_way + 1):
+            for y_way in range(max_y_way + 1):
+                for z_way in range(abs(y_way - x_way), min(max_z_way, x_way + y_way) + 1, 2):
+                    self.combinations.append((x_way, y_way, z_way))
+                    self.coefficient[(x_way, y_way, z_way)] = nn.Parameter(torch.tensor(1.))
+        self.linear = SelfInteractionLayer(input_dim=input_dim, 
+                                           max_way=max_z_way, 
+                                           output_dim=output_dim)
+
+        # # method 2
+        # number_of_z = [0] * (max_z_way + 1)
+        # for x_way in range(max_x_way + 1):
+        #     for y_way in range(max_y_way + 1):
+        #         for z_way in range(abs(y_way - x_way), min(max_z_way, x_way + y_way) + 1, 2):
+        #             self.combinations.append((x_way, y_way, z_way))
+        #             number_of_z[z_way] += 1
+
+        # self.linear_list = nn.ModuleList([
+        #     TensorLinear(input_dim * number_of_z[z_way], output_dim, bias=(way==0)) 
+        #     for way in range(max_z_way + 1)])
+
+    def forward(self,
+                x : Dict[int, torch.Tensor],
+                y : Dict[int, torch.Tensor],
+                ) -> Dict[int, torch.Tensor]:
+        output_tensors = torch.jit.annotate(Dict[int, torch.Tensor], {})
+        for x_way, y_way, z_way in self.combinations:
+            output_tensor = self.coefficient[(x_way, y_way, z_way)] * \
+                _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
+            if z_way not in output_tensors:
+                output_tensors[z_way] = output_tensor
+            else:
+                output_tensors[z_way] += output_tensor
+        output_tensors = self.linear(output_tensors)
+        return output_tensors
+
+
+# TODO
+# Test allowing higher order such as (2, 2) -> 4, (4, 2) -> 2 ?
+class MultiBodyLayer(nn.Module):
+    """
+    Node operation:
+    mix h_i^l for different l
+    """
+    def __init__(self,
+                 input_dim      : int,
+                 output_dim     : int,
+                 max_n_body     : int=3,
+                 max_way     : int=2,
+                 ) -> None:
+        super().__init__()
+        self.max_n_body = max_n_body
+        self.max_way = max_way
+        self.combinations = []
+        n_body_tensors = [[1] *  (max_way + 1)]
+        for n in range(max_n_body - 1):
+            n_body_tensors.append([0] *  (max_way + 1))
+            for way1 in range(max_way + 1):
+                for way2 in range(way1, max_way + 1):
+                    for way3 in range(abs(way2 - way1), min(max_way, way1 + way2) + 1, 2):
+                        n_body_tensors[n + 1][way3] += n_body_tensors[n][way1]
+                        self.combinations.append((way1, way2, way3))
+
+        self.linear_list = nn.ModuleList([
+            TensorLinear(input_dim * sum([n_body_tensors[n][way] for n in range(max_n_body)]), 
+                         output_dim, 
+                         bias=(way==0)) 
+            for way in range(max_way + 1)])
+
+    def forward(self,
+                input_tensors : Dict[int, torch.Tensor],
+                ) -> Dict[int, torch.Tensor]:
+        output_tensors = {}
+        n_body_tensors = {0: {way: [input_tensors[way]] for way in input_tensors}}
+        for n in range(self.max_n_body):
+            n_body_tensors[n + 1] = {way: [] for way in range(self.max_way + 1)}
+            for way1, way2, way3 in self.combinations:
+                for tensor in n_body_tensors[n][way1]:
+                    n_body_tensors[n + 1][way3].append(_aggregate_new(tensor, input_tensors[way2], way1, way2, way3))
+        for way, linear in enumerate(self.linear_list):
+            tensor = torch.cat([t for n in range(self.max_n_body) for t in n_body_tensors[n][way]], dim=1)  # nb, nc*n, nd, nd, ...
+            output_tensors[way] = linear(tensor)
+        return output_tensors
+
+
+class GraphConvLayer(nn.Module):
+    def __init__(self, 
+                 radial_fn      : RadialLayer,
+                 input_dim      : int,
+                 output_dim     : int,
+                 max_in_way     : int=2,
+                 max_r_way      : int=2,
+                 max_out_way    : int=2,
+                 ) -> None:
+        super().__init__()
+        self.radial_fn = radial_fn
+        self.rbf_mixing_list = nn.ModuleList()
+        self.combinations = []
+        for r_way in range(max_r_way + 1):
+            self.rbf_mixing_list.append(nn.Linear(radial_fn.n_features, output_dim, bias=False))
+            for in_way in range(max_in_way + 1):
+                for out_way in range(abs(r_way - in_way), min(max_out_way, r_way + in_way) + 1, 2):
+                    self.combinations.append((in_way, r_way, out_way))
+        
+        self.U = SelfInteractionLayer(input_dim=input_dim * 3,
+                                      max_way=max_in_way,
+                                      output_dim=input_dim)
+
+        self.tensor_product = TensorProductLayer(input_dim=input_dim,
+                                                 output_dim=output_dim,
+                                                 max_x_way=max_in_way,
+                                                 max_y_way=max_r_way,
+                                                 max_z_way=max_out_way)
+        self.max_in_way = max_in_way
+        self.max_r_way = max_r_way
+
+    def forward(self,
+                node_info  : Dict[int, torch.tensor],
+                edge_info  : Dict[int, torch.tensor],
+                batch_data : Dict[str, torch.tensor]):
+        idx_i = batch_data['idx_i']
+        idx_j = batch_data['idx_j']
+        _, dij, _ = find_distances(batch_data)
+        rbf_ij = self.radial_fn(dij)
+        x = {}
+        y = {}
+        for in_way in range(self.max_in_way + 1):
+            x[in_way] = torch.cat([node_info[in_way][idx_i],
+                                   node_info[in_way][idx_j],
+                                   edge_info[in_way]], dim=1)
+
+        for r_way, rbf_mixing in enumerate(self.rbf_mixing_list):
+            fn = rbf_mixing(rbf_ij)
+            y[r_way] = find_moment(batch_data, r_way).unsqueeze(1) * expand_to(fn, n_dim=r_way + 2)
+
+        return self.tensor_product(self.U(x), y)
