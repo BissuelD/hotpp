@@ -25,6 +25,7 @@ __all__ = ["TensorLinear",
            "SelfInteractionLayer",
            "NonLinearLayer",
            "MultiBodyLayer",
+           "SOnEquivalentLayer"
            ]
 
 
@@ -250,11 +251,11 @@ class TensorProductLayer(nn.Module):
             for y_way in range(max_y_way + 1):
                 for z_way in range(abs(y_way - x_way), min(max_z_way, x_way + y_way) + 1, 2):
                     self.combinations.append((x_way, y_way, z_way))
-                    self.coefficient[(x_way, y_way, z_way)] = nn.Parameter(torch.tensor(1.))
-        self.linear = SelfInteractionLayer(input_dim=input_dim, 
-                                           max_way=max_z_way, 
-                                           output_dim=output_dim)
-
+        #            self.coefficient[(x_way, y_way, z_way)] = nn.Parameter(torch.tensor(1.))
+        # self.linear = SelfInteractionLayer(input_dim=input_dim, 
+        #                                    max_way=max_z_way, 
+        #                                    output_dim=output_dim)
+        # print(self.combinations)
         # # method 2
         # number_of_z = [0] * (max_z_way + 1)
         # for x_way in range(max_x_way + 1):
@@ -273,8 +274,9 @@ class TensorProductLayer(nn.Module):
                 ) -> Dict[int, torch.Tensor]:
         output_tensors = torch.jit.annotate(Dict[int, torch.Tensor], {})
         for x_way, y_way, z_way in self.combinations:
-            output_tensor = self.coefficient[(x_way, y_way, z_way)] * \
-                _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
+            output_tensor = _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
+            # self.coefficient[(x_way, y_way, z_way)] * \
+                # _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
                 # TensorAggregateOP.oplist[(x_way, y_way, z_way)](x[x_way], 
                 #                                                 y[y_way],
                 #                                                 x_way,
@@ -284,7 +286,7 @@ class TensorProductLayer(nn.Module):
                 output_tensors[z_way] = output_tensor
             else:
                 output_tensors[z_way] += output_tensor
-        output_tensors = self.linear(output_tensors)
+        # output_tensors = self.linear(output_tensors)
         return output_tensors
 
 
@@ -354,17 +356,14 @@ class GraphConvLayer(nn.Module):
                  ) -> None:
         super().__init__()
         self.radial_fn = radial_fn
-        self.rbf_mixing_list = nn.ModuleList()
-        self.combinations = []
-        for r_way in range(max_r_way + 1):
-            self.rbf_mixing_list.append(nn.Linear(radial_fn.n_features, output_dim, bias=False))
-            for in_way in range(max_in_way + 1):
-                for out_way in range(abs(r_way - in_way), min(max_out_way, r_way + in_way) + 1, 2):
-                    self.combinations.append((in_way, r_way, out_way))
-        
-        self.U = SelfInteractionLayer(input_dim=input_dim * 3,
-                                      max_way=max_in_way,
-                                      output_dim=input_dim)
+        self.rbf_mixing_list = nn.ModuleList([
+            nn.Linear(radial_fn.n_features, input_dim, bias=False)
+            for r_way in range(max_r_way + 1)
+        ])
+
+        # self.U = SelfInteractionLayer(input_dim=input_dim * 3,
+        #                               max_way=max_in_way,
+        #                               output_dim=input_dim)
 
         self.tensor_product = TensorProductLayer(input_dim=input_dim,
                                                  output_dim=output_dim,
@@ -397,3 +396,77 @@ class GraphConvLayer(nn.Module):
             y[r_way] = find_moment(batch_data, r_way).unsqueeze(1) * expand_to(fn, n_dim=r_way + 2)
 
         return self.tensor_product(x, y)
+    
+
+class SOnEquivalentLayer(nn.Module):
+    def __init__(self,
+                 radial_fn      : RadialLayer,
+                 max_r_way      : int,
+                 max_in_way     : int,
+                 max_out_way    : int,
+                 input_dim      : int,
+                 output_dim     : int,
+                 norm_factor    : float=1.0,
+                 activate_fn    : str='jilu',
+                 mode           : str='normal',
+                 ) -> None:
+        super().__init__()
+        if mode == 'normal':
+            self.tensor_aggregate = TensorAggregateLayer(radial_fn=radial_fn,
+                                                        n_channel=input_dim,
+                                                        max_in_way=max_in_way,
+                                                        max_out_way=max_out_way,
+                                                        max_r_way=max_r_way,
+                                                        norm_factor=norm_factor,)
+        elif mode == 'simple':
+            self.tensor_aggregate = SimpleTensorAggregateLayer(radial_fn=radial_fn,
+                                                               n_channel=input_dim,
+                                                               max_in_way=max_in_way,
+                                                               max_out_way=max_out_way,
+                                                               max_r_way=max_r_way,
+                                                               norm_factor=norm_factor,)
+        # input for SelfInteractionLayer and NonLinearLayer is the output of TensorAggregateLayer
+        # so the max_in_way should equal to max_out_way of TensorAggregateLayer
+        self.self_interact = SelfInteractionLayer(input_dim=input_dim,
+                                                  max_way=max_out_way,
+                                                  output_dim=output_dim)
+        self.non_linear = NonLinearLayer(activate_fn=activate_fn,
+                                         max_way=max_out_way,
+                                         input_dim=output_dim)
+
+    def forward(self,
+                input_tensors : Dict[int, torch.Tensor],
+                batch_data    : Dict[str, torch.Tensor],
+                ) -> Dict[int, torch.Tensor]:
+        input_tensors = self.propagate(input_tensors, batch_data)
+        return input_tensors
+
+    # TODO: sparse version
+    def message_and_aggregate(self,
+                              input_tensors : Dict[int, torch.Tensor],
+                              batch_data    : Dict[str, torch.Tensor],
+                              ) -> Dict[int, torch.Tensor]:
+        output_tensors =  self.tensor_aggregate(input_tensors=input_tensors,
+                                                batch_data=batch_data)
+        # resnet
+        for r_way in input_tensors.keys():
+            output_tensors[r_way] += input_tensors[r_way]
+        return output_tensors
+
+    def update(self,
+               input_tensors : Dict[int, torch.Tensor],
+               ) -> Dict[int, torch.Tensor]:
+        output_tensors = self.self_interact(input_tensors)
+        output_tensors = self.non_linear(output_tensors)
+        # resnet
+        for r_way in input_tensors.keys():
+            output_tensors[r_way] += input_tensors[r_way]
+        return output_tensors
+
+    def propagate(self,
+                  input_tensors : Dict[int, torch.Tensor],
+                  batch_data : Dict[str, torch.Tensor],
+                  ) -> Dict[int, torch.Tensor]:
+        output_tensors = self.message_and_aggregate(input_tensors, batch_data)
+        output_tensors = self.update(output_tensors)
+        return output_tensors

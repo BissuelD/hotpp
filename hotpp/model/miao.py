@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from .base import AtomicModule
 from ..layer import EmbeddingLayer, RadialLayer, ReadoutLayer
-from ..layer.equivalent import SelfInteractionLayer, NonLinearLayer, GraphConvLayer
+from ..layer.equivalent import SelfInteractionLayer, NonLinearLayer, GraphConvLayer, SOnEquivalentLayer
 from ..utils import find_distances, _scatter_add, res_add, TensorAggregateOP
 
 
@@ -18,7 +18,6 @@ class MiaoBlock(nn.Module):
                  output_dim     : int,
                  norm_factor    : float=1.0,
                  activate_fn    : str='silu',
-                 mode           : str='normal',
                  ) -> None:
         super().__init__()
         self.graph_conv = GraphConvLayer(radial_fn=radial_fn,
@@ -64,6 +63,7 @@ class MiaoBlock(nn.Module):
         res_info = {}
         for way in edge_info.keys():
             res_info[way] = _scatter_add(edge_info[way], idx_i, dim_size=n_atoms) / self.norm_factor
+
         res_info = self.non_linear(self.self_interact(res_info))
         return res_add(node_info, res_info)
 
@@ -91,9 +91,8 @@ class MiaoNet(AtomicModule):
 
         self.register_buffer("mean", torch.tensor(mean).float())
         self.register_buffer("std", torch.tensor(std).float())
-        self.register_buffer("norm_factor", torch.tensor(norm_factor).float())
         self.embedding_layer = embedding_layer
-        self.radial_fn = radial_fn
+        #self.radial_fn = radial_fn
 
         max_in_way = [0] + max_out_way[1:]
         hidden_nodes = [embedding_layer.n_channel] + output_dim
@@ -107,24 +106,26 @@ class MiaoNet(AtomicModule):
                       input_dim=hidden_nodes[i],
                       output_dim=hidden_nodes[i + 1],
                       norm_factor=norm_factor,
-                      mode=mode) for i in range(n_layers)])
+                      ) for i in range(n_layers)])
+
         self.readout_layer = ReadoutLayer(n_dim=hidden_nodes[-1],
                                           target_way=target_way,
                                           activate_fn=activate_fn,
                                           bilinear=bilinear,
                                           e_dim=embedding_layer.n_channel)
         
-        TensorAggregateOP.set_max(max(max_in_way), max(max_out_way), max(max_r_way))
+        # TensorAggregateOP.set_max(max(max_in_way), max(max_out_way), max(max_r_way))
 
     def calculate(self,
                   batch_data : Dict[str, torch.Tensor],
                   ) -> Dict[str, torch.Tensor]:
         find_distances(batch_data)
         emb = self.embedding_layer(batch_data=batch_data)
-        _, dij, _ = find_distances(batch_data)
-        rbf = self.radial_fn(dij)
+        #_, dij, _ = find_distances(batch_data)
+        #rbf = self.radial_fn(dij)
         node_info = {0: emb}
-        edge_info = {0: rbf}
+        #edge_info = {0: rbf}
+        edge_info = {0: emb}
         for en_equivalent in self.en_equivalent_blocks:
             node_info, edge_info = en_equivalent(node_info, edge_info, batch_data)
         output_tensors = self.readout_layer(node_info, emb)

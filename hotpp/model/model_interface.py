@@ -78,7 +78,7 @@ class LitAtomicModule(pl.LightningModule):
         embedding = {}
         readout = {}
         for name, param in self.model.named_parameters():
-            if "son_equivalent_layers" in name:
+            if "equivalent" in name:
                 if "weight" in name:
                     decay_interactions[name] = param
                 else:
