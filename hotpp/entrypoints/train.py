@@ -303,7 +303,12 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
     with open(input_file) as f:
         update_dict(p_dict, yaml.load(f, Loader=yaml.FullLoader))
 
-    os.makedirs(p_dict["outputDir"], exist_ok=True)
+    if os.path.exists(p_dict["outputDir"]):
+        i = 1
+        while os.path.exists(f"{p_dict['outputDir']}{i}"):
+            i += 1
+        shutil.move(p_dict["outputDir"], f"{p_dict['outputDir']}{i}")
+    os.makedirs(p_dict["outputDir"])
 
     with open("allpara.yaml", "w") as f:
         yaml.dump(p_dict, f)
