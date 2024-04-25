@@ -237,8 +237,6 @@ class NonLinearLayer(nn.Module):
 # number parameters: n_path + n_channel * n_channel vs. npath * n_channel * n_channel
 class TensorProductLayer(nn.Module):
     def __init__(self,
-                 input_dim      : int,
-                 output_dim     : int,
                  max_x_way      : int=2,
                  max_y_way      : int=2,
                  max_z_way      : int=2,
@@ -251,19 +249,6 @@ class TensorProductLayer(nn.Module):
                 for z_way in range(abs(y_way - x_way), min(max_z_way, x_way + y_way) + 1, 2):
                     self.combinations.append((x_way, y_way, z_way))
                     self.coefficient[(x_way, y_way, z_way)] = nn.Parameter(torch.tensor(1.))
-        self.linear_list = nn.ModuleList([
-            TensorLinear(input_dim, output_dim, bias=(way==0)) 
-            for way in range(max_z_way + 1)])
-        # self.combinations = []
-        # number_of_z = [0] * (max_z_way + 1)
-        # for x_way in range(max_x_way + 1):
-        #     for y_way in range(max_y_way + 1):
-        #         for z_way in range(abs(y_way - x_way), min(max_z_way, x_way + y_way) + 1, 2):
-        #             self.combinations.append((x_way, y_way, z_way))
-        #             number_of_z[z_way] += 1
-        # self.linear_list = nn.ModuleList([
-        #     TensorLinear(input_dim * number_of_z[way], output_dim, bias=(way==0)) 
-        #     for way in range(max_z_way + 1)])
 
     def forward(self,
                 x : Dict[int, torch.Tensor],
@@ -271,16 +256,6 @@ class TensorProductLayer(nn.Module):
                 ) -> Dict[int, torch.Tensor]:
         output_tensors = {}
         for x_way, y_way, z_way in self.combinations:
-            # output_tensor = _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
-            #     # TensorAggregateOP.oplist[(x_way, y_way, z_way)](x[x_way], 
-            #     #                                                 y[y_way],
-            #     #                                                 x_way,
-            #     #                                                 y_way,
-            #     #                                                 z_way)
-            # if z_way not in output_tensors:
-            #     output_tensors[z_way] = output_tensor
-            # else:
-            #     output_tensors[z_way] = torch.cat([output_tensors[z_way], output_tensor], dim=1)
             output_tensor = self.coefficient[(x_way, y_way, z_way)] * \
                 _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
                 # TensorAggregateOP.oplist[(x_way, y_way, z_way)](x[x_way], 
@@ -293,8 +268,6 @@ class TensorProductLayer(nn.Module):
             else:
                 output_tensors[z_way] += output_tensor
 
-        for way, linear in enumerate(self.linear_list):
-            output_tensors[way] = linear(output_tensors[way])
         return output_tensors
 
 
@@ -314,9 +287,9 @@ class MultiBodyLayer(nn.Module):
         super().__init__()
         self.max_n_body = max_n_body
         self.max_way = max_way
-        self.combinations = []
         n_body_tensors = [[1] *  (max_way + 1)]
         for n in range(max_n_body - 1):
+            self.combinations = []
             n_body_tensors.append([0] *  (max_way + 1))
             for way1 in range(max_way + 1):
                 for way2 in range(way1, max_way + 1):
@@ -335,7 +308,7 @@ class MultiBodyLayer(nn.Module):
                 ) -> Dict[int, torch.Tensor]:
         output_tensors = {}
         n_body_tensors = {0: {way: [input_tensors[way]] for way in input_tensors}}
-        for n in range(self.max_n_body):
+        for n in range(self.max_n_body - 1):
             n_body_tensors[n + 1] = {way: [] for way in range(self.max_way + 1)}
             for way1, way2, way3 in self.combinations:
                 for tensor in n_body_tensors[n][way1]:
@@ -365,17 +338,15 @@ class GraphConvLayer(nn.Module):
         super().__init__()
         self.radial_fn = radial_fn
         self.rbf_mixing_list = nn.ModuleList([
-            nn.Linear(radial_fn.n_features, input_dim, bias=False)
+            nn.Linear(radial_fn.n_features, output_dim, bias=False)
             for r_way in range(max_r_way + 1)
         ])
 
         self.U = SelfInteractionLayer(input_dim=input_dim * 3,
                                       max_way=max_in_way,
-                                      output_dim=input_dim)
+                                      output_dim=output_dim)
 
-        self.tensor_product = TensorProductLayer(input_dim=input_dim,
-                                                 output_dim=output_dim,
-                                                 max_x_way=max_in_way,
+        self.tensor_product = TensorProductLayer(max_x_way=max_in_way,
                                                  max_y_way=max_r_way,
                                                  max_z_way=max_out_way)
         self.max_in_way = max_in_way

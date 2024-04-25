@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from .base import AtomicModule
 from ..layer import EmbeddingLayer, RadialLayer, ReadoutLayer
-from ..layer.equivalent import NonLinearLayer, GraphConvLayer
+from ..layer.equivalent import NonLinearLayer, GraphConvLayer, SelfInteractionLayer
 from ..utils import find_distances, _scatter_add, res_add, TensorAggregateOP
 
 
@@ -27,6 +27,9 @@ class UpdateNodeBlock(nn.Module):
                                          max_out_way=max_out_way,
                                          max_r_way=max_r_way,
                                          )
+        self.self_interact = SelfInteractionLayer(input_dim=input_dim,
+                                                  max_way=max_out_way,
+                                                  output_dim=output_dim)
         self.non_linear = NonLinearLayer(activate_fn=activate_fn,
                                          max_way=max_out_way,
                                          input_dim=output_dim)
@@ -43,7 +46,8 @@ class UpdateNodeBlock(nn.Module):
         n_atoms = batch_data['atomic_number'].shape[0]
         for way in message.keys():
             res_info[way] = _scatter_add(message[way], idx_i, dim_size=n_atoms) / self.norm_factor
-        return res_add(node_info, self.non_linear(res_info))
+        res_info = self.non_linear(self.self_interact(res_info))
+        return res_add(node_info, res_info)
 
 
 class UpdateEdgeBlock(nn.Module):
@@ -63,6 +67,9 @@ class UpdateEdgeBlock(nn.Module):
                                          max_in_way=max_in_way,
                                          max_out_way=max_out_way,
                                          max_r_way=max_r_way,)
+        self.self_interact = SelfInteractionLayer(input_dim=input_dim,
+                                                  max_way=max_out_way,
+                                                  output_dim=output_dim)
         self.non_linear = NonLinearLayer(activate_fn=activate_fn,
                                          max_way=max_out_way,
                                          input_dim=output_dim)
@@ -73,7 +80,8 @@ class UpdateEdgeBlock(nn.Module):
                 batch_data   : Dict[str, torch.Tensor],
                 ) -> Dict[int, torch.Tensor]:
         message = self.graph_conv(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
-        return res_add(edge_info, self.non_linear(message))
+        res_info = self.non_linear(self.self_interact(message))
+        return res_add(edge_info, res_info)
 
 class MiaoBlock(nn.Module):
     def __init__(self,
@@ -164,11 +172,10 @@ class MiaoNet(AtomicModule):
     def calculate(self,
                   batch_data : Dict[str, torch.Tensor],
                   ) -> Dict[str, torch.Tensor]:
-        find_distances(batch_data)
         emb = self.embedding_layer(batch_data=batch_data)
+        node_info = {0: emb}
         _, dij, _ = find_distances(batch_data)
         rbf = self.radial_fn(dij)
-        node_info = {0: emb}
         edge_info = {0: rbf}
         for en_equivalent in self.en_equivalent_blocks:
             node_info, edge_info = en_equivalent(node_info, edge_info, batch_data)
