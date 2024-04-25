@@ -4,11 +4,11 @@ import torch
 from torch import nn
 from .base import AtomicModule
 from ..layer import EmbeddingLayer, RadialLayer, ReadoutLayer
-from ..layer.equivalent import SelfInteractionLayer, NonLinearLayer, GraphConvLayer, SOnEquivalentLayer
+from ..layer.equivalent import NonLinearLayer, GraphConvLayer
 from ..utils import find_distances, _scatter_add, res_add, TensorAggregateOP
 
 
-class MiaoBlock(nn.Module):
+class UpdateNodeBlock(nn.Module):
     def __init__(self,
                  radial_fn      : RadialLayer,
                  max_r_way      : int,
@@ -25,47 +25,92 @@ class MiaoBlock(nn.Module):
                                          output_dim=output_dim,
                                          max_in_way=max_in_way,
                                          max_out_way=max_out_way,
-                                         max_r_way=max_r_way,)
-        self.self_interact = SelfInteractionLayer(input_dim=input_dim,
-                                                  max_way=max_out_way,
-                                                  output_dim=output_dim)
+                                         max_r_way=max_r_way,
+                                         )
         self.non_linear = NonLinearLayer(activate_fn=activate_fn,
                                          max_way=max_out_way,
                                          input_dim=output_dim)
         self.register_buffer("norm_factor", torch.tensor(norm_factor))
-        self.max_out_way = max_out_way
 
     def forward(self,
                 node_info    : Dict[int, torch.Tensor],
                 edge_info    : Dict[int, torch.Tensor],
                 batch_data   : Dict[str, torch.Tensor],
                 ) -> Dict[int, torch.Tensor]:
-        edge_info = self.update_edge(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
-        node_info = self.update_node(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
-        return node_info, edge_info
-
-    def update_edge(self,
-                    node_info   : Dict[int, torch.Tensor],
-                    edge_info   : Dict[int, torch.Tensor],
-                    batch_data  : Dict[str, torch.Tensor],
-                    ) -> Dict[int, torch.Tensor]:
-        res_info = self.graph_conv(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
-        # return res_add(edge_info, res_info)
-        return res_info
-
-    def update_node(self,
-                    node_info   : Dict[int, torch.Tensor],
-                    edge_info   : Dict[int, torch.Tensor],
-                    batch_data  : Dict[str, torch.Tensor],
-                    ) -> Dict[int, torch.Tensor]:
+        message = self.graph_conv(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        res_info = {}
         idx_i = batch_data["idx_i"]
         n_atoms = batch_data['atomic_number'].shape[0]
-        res_info = {}
-        for way in edge_info.keys():
-            res_info[way] = _scatter_add(edge_info[way], idx_i, dim_size=n_atoms) / self.norm_factor
+        for way in message.keys():
+            res_info[way] = _scatter_add(message[way], idx_i, dim_size=n_atoms) / self.norm_factor
+        return res_add(node_info, self.non_linear(res_info))
 
-        res_info = self.non_linear(self.self_interact(res_info))
-        return res_add(node_info, res_info)
+
+class UpdateEdgeBlock(nn.Module):
+    def __init__(self,
+                 radial_fn      : RadialLayer,
+                 max_r_way      : int,
+                 max_in_way     : int,
+                 max_out_way    : int,
+                 input_dim      : int,
+                 output_dim     : int,
+                 activate_fn    : str='silu',
+                 ) -> None:
+        super().__init__()
+        self.graph_conv = GraphConvLayer(radial_fn=radial_fn,
+                                         input_dim=input_dim,
+                                         output_dim=output_dim,
+                                         max_in_way=max_in_way,
+                                         max_out_way=max_out_way,
+                                         max_r_way=max_r_way,)
+        self.non_linear = NonLinearLayer(activate_fn=activate_fn,
+                                         max_way=max_out_way,
+                                         input_dim=output_dim)
+
+    def forward(self,
+                node_info    : Dict[int, torch.Tensor],
+                edge_info    : Dict[int, torch.Tensor],
+                batch_data   : Dict[str, torch.Tensor],
+                ) -> Dict[int, torch.Tensor]:
+        message = self.graph_conv(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        return res_add(edge_info, self.non_linear(message))
+
+class MiaoBlock(nn.Module):
+    def __init__(self,
+                 radial_fn      : RadialLayer,
+                 max_r_way      : int,
+                 max_in_way     : int,
+                 max_out_way    : int,
+                 input_dim      : int,
+                 output_dim     : int,
+                 norm_factor    : float=1.0,
+                 activate_fn    : str='silu',
+                 ) -> None:
+        super().__init__()
+        self.node_block = UpdateNodeBlock(radial_fn=radial_fn, 
+                                          max_r_way=max_r_way, 
+                                          max_in_way=max_in_way,
+                                          max_out_way=max_out_way,
+                                          input_dim=input_dim, 
+                                          output_dim=output_dim, 
+                                          norm_factor=norm_factor, 
+                                          activate_fn=activate_fn)
+        self.edge_block = UpdateEdgeBlock(radial_fn=radial_fn, 
+                                          max_r_way=max_r_way, 
+                                          max_in_way=max_in_way,
+                                          max_out_way=max_out_way,
+                                          input_dim=input_dim,
+                                          output_dim=output_dim,
+                                          activate_fn=activate_fn)
+
+    def forward(self,
+                node_info    : Dict[int, torch.Tensor],
+                edge_info    : Dict[int, torch.Tensor],
+                batch_data   : Dict[str, torch.Tensor],
+                ) -> Dict[int, torch.Tensor]:
+        node_info = self.node_block(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        edge_info = self.edge_block(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        return node_info, edge_info
 
 class MiaoNet(AtomicModule):
     """
@@ -92,7 +137,7 @@ class MiaoNet(AtomicModule):
         self.register_buffer("mean", torch.tensor(mean).float())
         self.register_buffer("std", torch.tensor(std).float())
         self.embedding_layer = embedding_layer
-        #self.radial_fn = radial_fn
+        self.radial_fn = radial_fn
 
         max_in_way = [0] + max_out_way[1:]
         hidden_nodes = [embedding_layer.n_channel] + output_dim
@@ -121,11 +166,10 @@ class MiaoNet(AtomicModule):
                   ) -> Dict[str, torch.Tensor]:
         find_distances(batch_data)
         emb = self.embedding_layer(batch_data=batch_data)
-        #_, dij, _ = find_distances(batch_data)
-        #rbf = self.radial_fn(dij)
+        _, dij, _ = find_distances(batch_data)
+        rbf = self.radial_fn(dij)
         node_info = {0: emb}
-        #edge_info = {0: rbf}
-        edge_info = {0: emb}
+        edge_info = {0: rbf}
         for en_equivalent in self.en_equivalent_blocks:
             node_info, edge_info = en_equivalent(node_info, edge_info, batch_data)
         output_tensors = self.readout_layer(node_info, emb)
