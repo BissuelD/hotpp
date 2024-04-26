@@ -6,7 +6,7 @@
 
 import torch
 from torch import nn
-from typing import Dict, Callable, Union, Optional
+from typing import Dict, Callable, Literal, Union, Optional
 from .base import RadialLayer, CutoffLayer
 from .activate import TensorActivateDict
 from ..utils import find_distances, find_moment, _scatter_add, _aggregate, expand_to, TensorAggregateOP, _aggregate_new
@@ -334,23 +334,43 @@ class GraphConvLayer(nn.Module):
                  max_in_way     : int=2,
                  max_r_way      : int=2,
                  max_out_way    : int=2,
+                 mode           : Literal['node_j', 'node_edge']='node_j',
                  ) -> None:
+        """Graph convolution layer
+
+        Args:
+            radial_fn (RadialLayer): rdf
+            input_dim (int): number of input channel
+            output_dim (int): number of output channel
+            max_in_way (int, optional): max order of input tensors. Defaults to 2.
+            max_r_way (int, optional): max order of filter tensors. Defaults to 2.
+            max_out_way (int, optional): max order of output tensors. Defaults to 2.
+            mode ('node_j' or 'node_edge', optional): 
+                'node_j' use node_info['idx_j'] only.
+                'node_edge' use node_info['idx_i'] | node_info['idx_j'] | edge_info.
+                Defaults to 'node_j'.
+        """
         super().__init__()
         self.radial_fn = radial_fn
         self.rbf_mixing_list = nn.ModuleList([
             nn.Linear(radial_fn.n_features, output_dim, bias=False)
             for r_way in range(max_r_way + 1)
         ])
-
-        self.U = SelfInteractionLayer(input_dim=input_dim * 3,
-                                      max_way=max_in_way,
-                                      output_dim=output_dim)
+        if mode == 'node_j':
+            self.U = SelfInteractionLayer(input_dim=input_dim,
+                                          max_way=max_in_way,
+                                          output_dim=output_dim)
+        elif mode == 'node_edge':
+            self.U = SelfInteractionLayer(input_dim=input_dim * 3,
+                                          max_way=max_in_way,
+                                          output_dim=output_dim)
 
         self.tensor_product = TensorProductLayer(max_x_way=max_in_way,
                                                  max_y_way=max_r_way,
                                                  max_z_way=max_out_way)
         self.max_in_way = max_in_way
         self.max_r_way = max_r_way
+        self.mode = mode
 
     def forward(self,
                 node_info  : Dict[int, torch.tensor],
@@ -363,12 +383,13 @@ class GraphConvLayer(nn.Module):
         x = {}
         y = {}
         for in_way in range(self.max_in_way + 1):
-            x[in_way] = torch.cat([node_info[in_way][idx_i],
-                                   node_info[in_way][idx_j],
-                                   edge_info[in_way]], dim=1)
+            if self.mode == 'node_j':
+                x[in_way] = node_info[in_way][idx_j]
+            elif self.mode == 'node_edge':
+                x[in_way] = torch.cat([node_info[in_way][idx_i],
+                                       node_info[in_way][idx_j],
+                                       edge_info[in_way]], dim=1)
         x = self.U(x)
-        for in_way in range(self.max_in_way + 1):
-            x[in_way] = node_info[in_way][idx_j]
 
         for r_way, rbf_mixing in enumerate(self.rbf_mixing_list):
             fn = rbf_mixing(rbf_ij)

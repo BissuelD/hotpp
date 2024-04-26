@@ -108,14 +108,14 @@ class MiaoMiaoBlock(nn.Module):
                                           output_dim=output_dim, 
                                           norm_factor=norm_factor, 
                                           activate_fn=activate_fn)
-        self.edge_block = UpdateEdgeBlock(radial_fn=radial_fn, 
-                                          max_n_body=max_n_body,
-                                          max_r_way=max_r_way, 
-                                          max_in_way=max_in_way,
-                                          max_out_way=max_out_way,
-                                          input_dim=input_dim,
-                                          output_dim=output_dim,
-                                          activate_fn=activate_fn)
+        # self.edge_block = UpdateEdgeBlock(radial_fn=radial_fn, 
+        #                                   max_n_body=max_n_body,
+        #                                   max_r_way=max_r_way, 
+        #                                   max_in_way=max_in_way,
+        #                                   max_out_way=max_out_way,
+        #                                   input_dim=input_dim,
+        #                                   output_dim=output_dim,
+        #                                   activate_fn=activate_fn)
 
     def forward(self,
                 node_info    : Dict[int, torch.Tensor],
@@ -123,7 +123,7 @@ class MiaoMiaoBlock(nn.Module):
                 batch_data   : Dict[str, torch.Tensor],
                 ) -> Dict[int, torch.Tensor]:
         node_info = self.node_block(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
-        edge_info = self.edge_block(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        # edge_info = self.edge_block(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
         return node_info, edge_info
 
 class MiaoMiaoNet(AtomicModule):
