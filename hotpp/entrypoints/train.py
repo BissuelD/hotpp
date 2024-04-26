@@ -207,8 +207,10 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
                         mean=mean,
                         std=std,
                         norm_factor=n_neighbor,
-                        mode=model_dict['mode'],
-                        bilinear=model_dict['bilinear']).to(p_dict['device'])
+                        bilinear=model_dict['bilinear'],
+                        conv_mode=model_dict['convMode'],
+                        update_edge=model_dict['updateEdge'],
+                        ).to(p_dict['device'])
     elif model_dict['net'] == 'miaomiao':
         model = MiaoMiaoNet(embedding_layer=emb,
                         radial_fn=radial_fn,
@@ -223,7 +225,10 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
                         std=std,
                         norm_factor=n_neighbor,
                         mode=model_dict['mode'],
-                        bilinear=model_dict['bilinear']).to(p_dict['device'])
+                        bilinear=model_dict['bilinear'],
+                        conv_mode=model_dict['convMode'],
+                        update_edge=model_dict['updateEdge'],
+                        ).to(p_dict['device'])
     assert isinstance(model_dict['Repulsion'], int), "Repulsion should be int!"
     if model_dict['Repulsion'] > 0:
         model = MultiAtomicModule({'main': model, 
@@ -253,6 +258,8 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
         },
         "Model": {
             "net": "miao",
+            "convMode": "node_j",
+            "updateEdge": False,
             "mode": "normal",
             "bilinear": False,
             "activateFn": "silu",

@@ -334,7 +334,7 @@ class GraphConvLayer(nn.Module):
                  max_in_way     : int=2,
                  max_r_way      : int=2,
                  max_out_way    : int=2,
-                 mode           : Literal['node_j', 'node_edge']='node_j',
+                 conv_mode      : Literal['node_j', 'node_edge']='node_j',
                  ) -> None:
         """Graph convolution layer
 
@@ -356,11 +356,11 @@ class GraphConvLayer(nn.Module):
             nn.Linear(radial_fn.n_features, output_dim, bias=False)
             for r_way in range(max_r_way + 1)
         ])
-        if mode == 'node_j':
+        if conv_mode == 'node_j':
             self.U = SelfInteractionLayer(input_dim=input_dim,
                                           max_way=max_in_way,
                                           output_dim=output_dim)
-        elif mode == 'node_edge':
+        elif conv_mode == 'node_edge':
             self.U = SelfInteractionLayer(input_dim=input_dim * 3,
                                           max_way=max_in_way,
                                           output_dim=output_dim)
@@ -370,7 +370,7 @@ class GraphConvLayer(nn.Module):
                                                  max_z_way=max_out_way)
         self.max_in_way = max_in_way
         self.max_r_way = max_r_way
-        self.mode = mode
+        self.conv_mode = conv_mode
 
     def forward(self,
                 node_info  : Dict[int, torch.tensor],
@@ -383,9 +383,9 @@ class GraphConvLayer(nn.Module):
         x = {}
         y = {}
         for in_way in range(self.max_in_way + 1):
-            if self.mode == 'node_j':
+            if self.conv_mode == 'node_j':
                 x[in_way] = node_info[in_way][idx_j]
-            elif self.mode == 'node_edge':
+            elif self.conv_mode == 'node_edge':
                 x[in_way] = torch.cat([node_info[in_way][idx_i],
                                        node_info[in_way][idx_j],
                                        edge_info[in_way]], dim=1)

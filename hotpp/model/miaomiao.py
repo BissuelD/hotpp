@@ -1,4 +1,4 @@
-from typing import Callable, List, Dict, Optional
+from typing import Callable, List, Dict, Optional, Literal
 import torch
 from torch import nn
 from .base import AtomicModule
@@ -17,6 +17,7 @@ class UpdateNodeBlock(nn.Module):
                  output_dim     : int,
                  norm_factor    : float=1.0,
                  activate_fn    : str='silu',
+                 conv_mode      : Literal['node_j', 'node_edge']='node_j',
                  ) -> None:
         super().__init__()
         self.graph_conv = GraphConvLayer(radial_fn=radial_fn,
@@ -25,6 +26,7 @@ class UpdateNodeBlock(nn.Module):
                                          max_in_way=max_in_way,
                                          max_out_way=max_out_way,
                                          max_r_way=max_r_way,
+                                         conv_mode=conv_mode,
                                          )
         self.self_interact = MultiBodyLayer(max_n_body=max_n_body,
                                             input_dim=input_dim, 
@@ -60,6 +62,7 @@ class UpdateEdgeBlock(nn.Module):
                  input_dim      : int,
                  output_dim     : int,
                  activate_fn    : str='silu',
+                 conv_mode      : Literal['node_j', 'node_edge']='node_j',
                  ) -> None:
         super().__init__()
         self.graph_conv = GraphConvLayer(radial_fn=radial_fn,
@@ -67,7 +70,8 @@ class UpdateEdgeBlock(nn.Module):
                                          output_dim=output_dim,
                                          max_in_way=max_in_way,
                                          max_out_way=max_out_way,
-                                         max_r_way=max_r_way,)
+                                         max_r_way=max_r_way,
+                                         conv_mode=conv_mode)
         self.self_interact = MultiBodyLayer(max_n_body=max_n_body,
                                             input_dim=input_dim,
                                             max_way=max_out_way,
@@ -97,6 +101,8 @@ class MiaoMiaoBlock(nn.Module):
                  output_dim     : int,
                  norm_factor    : float=1.0,
                  activate_fn    : str='silu',
+                 conv_mode      : Literal['node_j', 'node_edge']='node_j',
+                 update_edge    : bool=False,
                  ) -> None:
         super().__init__()
         self.node_block = UpdateNodeBlock(radial_fn=radial_fn, 
@@ -107,15 +113,20 @@ class MiaoMiaoBlock(nn.Module):
                                           input_dim=input_dim, 
                                           output_dim=output_dim, 
                                           norm_factor=norm_factor, 
-                                          activate_fn=activate_fn)
-        # self.edge_block = UpdateEdgeBlock(radial_fn=radial_fn, 
-        #                                   max_n_body=max_n_body,
-        #                                   max_r_way=max_r_way, 
-        #                                   max_in_way=max_in_way,
-        #                                   max_out_way=max_out_way,
-        #                                   input_dim=input_dim,
-        #                                   output_dim=output_dim,
-        #                                   activate_fn=activate_fn)
+                                          activate_fn=activate_fn, 
+                                          conv_mode=conv_mode)
+        if update_edge:
+            self.edge_block = UpdateEdgeBlock(radial_fn=radial_fn, 
+                                            max_n_body=max_n_body,
+                                            max_r_way=max_r_way, 
+                                            max_in_way=max_in_way,
+                                            max_out_way=max_out_way,
+                                            input_dim=input_dim,
+                                            output_dim=output_dim,
+                                            activate_fn=activate_fn,
+                                            conv_mode=conv_mode)
+        self.update_edge = update_edge
+
 
     def forward(self,
                 node_info    : Dict[int, torch.Tensor],
@@ -123,7 +134,8 @@ class MiaoMiaoBlock(nn.Module):
                 batch_data   : Dict[str, torch.Tensor],
                 ) -> Dict[int, torch.Tensor]:
         node_info = self.node_block(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
-        # edge_info = self.edge_block(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
+        if self.update_edge:
+            edge_info = self.edge_block(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
         return node_info, edge_info
 
 class MiaoMiaoNet(AtomicModule):
@@ -141,8 +153,9 @@ class MiaoMiaoNet(AtomicModule):
                  mean            : float=0.,
                  std             : float=1.,
                  norm_factor     : float=1.,
-                 mode            : str='normal',
                  bilinear        : bool=False,
+                 conv_mode       : Literal['node_j', 'node_edge']='node_j',
+                 update_edge     : bool=False,
                  ):
         super().__init__()
         self.register_buffer("mean", torch.tensor(mean).float())
@@ -164,6 +177,8 @@ class MiaoMiaoNet(AtomicModule):
                           input_dim=hidden_nodes[i],
                           output_dim=hidden_nodes[i + 1],
                           norm_factor=norm_factor,
+                          conv_mode=conv_mode,
+                          update_edge=update_edge,
                           ) for i in range(n_layers)])
         self.readout_layer = ReadoutLayer(n_dim=hidden_nodes[-1],
                                           target_way=target_way,
