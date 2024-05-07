@@ -163,19 +163,8 @@ class MiaoNet(AtomicModule):
 
         max_in_way = [0] + max_out_way[1:]
         hidden_nodes = [embedding_layer.n_channel] + output_dim
-        self.en_equivalent_blocks = nn.ModuleList([
-            MiaoBlock(activate_fn=activate_fn,
-                      radial_fn=radial_fn.replicate(),
-                      # Use factory method, so the radial_fn in each layer are different
-                      max_r_way=max_r_way[i],
-                      max_in_way=max_in_way[i],
-                      max_out_way=max_out_way[i],
-                      input_dim=hidden_nodes[i],
-                      output_dim=hidden_nodes[i + 1],
-                      norm_factor=norm_factor,
-                      conv_mode=conv_mode,
-                      update_edge=update_edge,
-                      ) for i in range(n_layers)])
+        self.en_equivalent_blocks = self.get_eq_blocks(activate_fn, max_r_way, max_in_way, max_out_way,
+            hidden_nodes, norm_factor, conv_mode, update_edge, n_layers)
 
         self.readout_layer = ReadoutLayer(n_dim=hidden_nodes[-1],
                                           target_way=target_way,
@@ -188,16 +177,38 @@ class MiaoNet(AtomicModule):
     def calculate(self,
                   batch_data : Dict[str, torch.Tensor],
                   ) -> Dict[str, torch.Tensor]:
-        emb = self.embedding_layer(batch_data=batch_data)
-        node_info = {0: emb}
-        _, dij, _ = find_distances(batch_data)
-        rbf = self.radial_fn(dij)
-        edge_info = {0: rbf}
+        node_info, edge_info = self.get_init_info(batch_data)
         for en_equivalent in self.en_equivalent_blocks:
             node_info, edge_info = en_equivalent(node_info, edge_info, batch_data)
-        output_tensors = self.readout_layer(node_info, emb)
+        output_tensors = self.readout_layer(node_info, None)
         if 'site_energy' in output_tensors:
             output_tensors['site_energy'] = output_tensors['site_energy'] * self.std + self.mean
         if 'direct_forces' in output_tensors:
             output_tensors['direct_forces'] = output_tensors['direct_forces'] * self.std
         return output_tensors
+
+    def get_init_info(self,
+                      batch_data : Dict[str, torch.Tensor],
+                      ):
+        emb = self.embedding_layer(batch_data=batch_data)
+        node_info = {0: emb}
+        _, dij, _ = find_distances(batch_data)
+        rbf = self.radial_fn(dij)
+        edge_info = {0: rbf}
+        return node_info, edge_info
+
+    def get_eq_blocks(self, activate_fn, max_r_way, max_in_way, max_out_way,
+            hidden_nodes, norm_factor, conv_mode, update_edge, n_layers):
+        return nn.ModuleList([
+            MiaoBlock(activate_fn=activate_fn,
+                      radial_fn=self.radial_fn.replicate(),
+                      # Use factory method, so the radial_fn in each layer are different
+                      max_r_way=max_r_way[i],
+                      max_in_way=max_in_way[i],
+                      max_out_way=max_out_way[i],
+                      input_dim=hidden_nodes[i],
+                      output_dim=hidden_nodes[i + 1],
+                      norm_factor=norm_factor,
+                      conv_mode=conv_mode,
+                      update_edge=update_edge,
+                      ) for i in range(n_layers)])

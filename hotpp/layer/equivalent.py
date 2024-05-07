@@ -401,19 +401,20 @@ class GraphConvLayer(nn.Module):
 class GraphNorm(nn.Module):
     """
     GraphNorm: A Principled Approach to Accelerating Graph Neural Network Training
+    加了怎么还变垃圾了？
     """
     def __init__(
         self,
         max_way: int,
         n_channel: int,
-        eps: float = 1e-5,
+        eps: float = 1e-3,
     ):
         super().__init__()
         self.eps = eps
 
-        self.alpha = nn.Parameter(torch.empty(max_way, n_channel))
+        self.alpha = nn.Parameter(torch.empty(max_way + 1, n_channel))
         self.beta = nn.Parameter(torch.empty(n_channel))   # only way=0 can add bias
-        self.gamma = nn.Parameter(torch.empty(max_way, n_channel))
+        self.gamma = nn.Parameter(torch.empty(max_way + 1, n_channel))
 
         self.reset_parameters()
 
@@ -432,10 +433,10 @@ class GraphNorm(nn.Module):
         for way in input_tensors:
             output_tensor = input_tensors[way]
 
-            mean = _scatter_add(output_tensor, batch) / expand_to(degree[:, None] * self.alpha[way][None, :], way + 2)
-            output_tensor = output_tensor - mean[batch]
+            mean = _scatter_add(output_tensor, batch) / expand_to(degree, way + 2)
+            output_tensor = output_tensor - mean[batch] * expand_to(self.alpha[way][None, :], way + 2)
             var = _scatter_add(output_tensor ** 2, batch) / expand_to(degree, way + 2)
-            output_tensor = output_tensor / (var[batch].sqrt() + self.eps)
+            output_tensor = output_tensor / (var[batch] + self.eps).sqrt()
 
             output_tensor = output_tensor * expand_to(self.gamma[way][None, :], way + 2)
             if way == 0:
