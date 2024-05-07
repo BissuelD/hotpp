@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from .base import AtomicModule
 from ..layer import EmbeddingLayer, RadialLayer, ReadoutLayer
-from ..layer.equivalent import MultiBodyLayer, GraphConvLayer, NonLinearLayer
+from ..layer.equivalent import MultiBodyLayer, GraphConvLayer, NonLinearLayer, GraphNorm
 from ..utils import find_distances, _scatter_add, res_add
 
 class UpdateNodeBlock(nn.Module):
@@ -16,6 +16,7 @@ class UpdateNodeBlock(nn.Module):
                  input_dim      : int,
                  output_dim     : int,
                  norm_factor    : float=1.0,
+                 norm           : str='graph',
                  activate_fn    : str='silu',
                  conv_mode      : Literal['node_j', 'node_edge']='node_j',
                  ) -> None:
@@ -36,6 +37,10 @@ class UpdateNodeBlock(nn.Module):
                                          max_way=max_out_way,
                                          input_dim=output_dim)
         self.register_buffer("norm_factor", torch.tensor(norm_factor))
+        if norm == 'graph':
+            self.norm = GraphNorm(max_way=max_out_way, n_channel=output_dim)
+        else:
+            self.norm = None
 
     def forward(self,
                 node_info    : Dict[int, torch.Tensor],
@@ -47,7 +52,9 @@ class UpdateNodeBlock(nn.Module):
         idx_i = batch_data["idx_i"]
         n_atoms = batch_data['atomic_number'].shape[0]
         for way in message.keys():
-            res_info[way] = _scatter_add(message[way], idx_i, dim_size=n_atoms) / self.norm_factor
+            res_info[way] = _scatter_add(message[way], idx_i, dim_size=n_atoms)# / self.norm_factor
+        if self.norm is not None:
+            res_info = self.norm(res_info, batch_data['batch'])
         res_info = self.non_linear(self.self_interact(res_info))
         return res_add(node_info, res_info)
 
