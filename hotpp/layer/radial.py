@@ -33,6 +33,7 @@ class ChebyshevPoly(RadialLayer):
     def replicate(self):
         return self.__class__(self.r_max, self.r_min, self.n_max, self.cutoff_fn)
 
+
 # DIRECTIONAL MESSAGE PASSING FOR MOLECULAR GRAPHS
 class BesselPoly(RadialLayer):
     def __init__(self, 
@@ -53,6 +54,7 @@ class BesselPoly(RadialLayer):
 
     def replicate(self):
         return self.__class__(self.r_max, self.n_max, self.cutoff_fn)
+
 
 class MLPPoly(RadialLayer):
     def __init__(self,
@@ -78,3 +80,28 @@ class MLPPoly(RadialLayer):
 
     def replicate(self):
         return self.__class__(self.n_hidden, self.radial_fn.replicate(), self.activate_fn, self.cutoff_fn)
+
+
+# class KANPoly(RadialLayer):
+#     def __init__(self,
+#                  n_hidden     : List[int],
+#                  radial_fn    : RadialLayer,
+#                  cutoff_fn    : Optional[CutoffLayer]=None,
+#                  ) -> None:
+#         super().__init__(n_features=n_hidden[-1] * radial_fn.n_features, cutoff_fn=cutoff_fn)
+#         self.n_hidden = n_hidden
+#         self.radial_fn = radial_fn
+#         self.kan = nn.ModuleList([nn.Linear(radial_fn.n_features, n_hidden[0])])
+#         for n_in, n_out in zip(n_hidden[:-1], n_hidden[1:]):
+#             self.kan.append(nn.Linear(radial_fn.n_features * n_in, n_out))
+
+#     def forward(self,
+#                 distances: torch.Tensor,
+#                 ) -> torch.Tensor:
+#         out = distances
+#         for kan_layer in self.kan:
+#             out = kan_layer(self.radial_fn(out))
+#         return out
+
+#     def replicate(self):
+#         return self.__class__(self.n_hidden, self.radial_fn.replicate(), self.activate_fn, self.cutoff_fn)

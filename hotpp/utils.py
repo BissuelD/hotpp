@@ -1,9 +1,8 @@
 import sys
 import torch
 import numpy as np
-import itertools
 import torch.nn.functional as F
-from typing import Iterable, Optional, Dict, List, Callable, Tuple, Union
+from typing import Optional, Dict, List, Callable, Tuple, Union
 
 
 def setup_seed(seed):

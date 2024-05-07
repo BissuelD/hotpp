@@ -224,7 +224,6 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
                         mean=mean,
                         std=std,
                         norm_factor=n_neighbor,
-                        mode=model_dict['mode'],
                         bilinear=model_dict['bilinear'],
                         conv_mode=model_dict['convMode'],
                         update_edge=model_dict['updateEdge'],
@@ -315,6 +314,7 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
         while os.path.exists(f"{p_dict['outputDir']}{i}"):
             i += 1
         shutil.move(p_dict["outputDir"], f"{p_dict['outputDir']}{i}")
+        os.system(f"cp log.txt input.yaml allpara.yaml {p_dict['outputDir']}{i}")
     os.makedirs(p_dict["outputDir"])
 
     with open("allpara.yaml", "w") as f:
