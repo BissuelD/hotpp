@@ -38,7 +38,9 @@ class EnergyForcesModel(FreezeAtomicModule):
         grads = torch.autograd.grad([site_energy.sum()],
                                     [batch_data['coordinate']],
                                     )
-        batch_data['forces_p'] = -grads[0]
+        dE_dr = grads[0]
+        if dE_dr is not None:
+            batch_data['forces_p'] = -dE_dr
         return batch_data
 
 
@@ -48,27 +50,27 @@ def main(*args, model="model.pt", device="cpu", output="infer.pt",
     if properties is None:
         properties = ['energy']
     if 'energy' in properties:
-        model = EnergyModel(model)
+        fmodel = EnergyModel(model)
     if 'forces' in properties:
-        model = EnergyForcesModel(model)
-    model.eval()
+        fmodel = EnergyForcesModel(model)
+    fmodel.eval()
     # change embedding layer
     if symbols is not None:
         all_elements = [atomic_numbers[s] for s in symbols]
     else:
-        all_elements = model.all_elements.cpu().numpy()
-    for params in model.parameters():
+        all_elements = fmodel.all_elements.cpu().numpy()
+    for params in fmodel.parameters():
         params.requires_grad=False
-    ase_infer = torch.jit.script(model)
+    ase_infer = torch.jit.script(fmodel)
     ase_infer.save(f'ase-{output}')
     # lammps symbol index is different
-    for name, value in model.named_parameters():
+    for name, value in fmodel.named_parameters():
         if "embedding_layer" in name:
             new_weight = torch.zeros(len(all_elements), value.shape[1])
             for i, n in enumerate(all_elements):
                 new_weight[i] = value[n].data
             value.data = new_weight
-    lammps_infer = torch.jit.script(model)
+    lammps_infer = torch.jit.script(fmodel)
     print(lammps_infer)
     lammps_infer = torch.jit.freeze(lammps_infer)
     lammps_infer.save(f'lammps-{output}')
