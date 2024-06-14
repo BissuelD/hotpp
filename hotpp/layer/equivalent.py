@@ -245,12 +245,12 @@ class TensorProductLayer(nn.Module):
                  ) -> None:
         super().__init__()
         self.combinations = []
-        self.coefficient = nn.ParameterDict()
+        # self.coefficient = nn.ParameterDict()
         for x_way in range(max_x_way + 1):
             for y_way in range(max_y_way + 1):
                 for z_way in range(abs(y_way - x_way), min(max_z_way, x_way + y_way) + 1, 2):
                     self.combinations.append((x_way, y_way, z_way))
-                    self.coefficient[str((x_way, y_way, z_way))] = nn.Parameter(torch.tensor(1.))
+                    # self.coefficient[str((x_way, y_way, z_way))] = nn.Parameter(torch.tensor(1.))
 
     def forward(self,
                 x : Dict[int, torch.Tensor],
@@ -260,8 +260,8 @@ class TensorProductLayer(nn.Module):
         for x_way, y_way, z_way in self.combinations:
             if x_way not in x or y_way not in y:
                 continue
-            coef: torch.Tensor = self.coefficient[str((x_way, y_way, z_way))]
-            output_tensor = coef * _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
+            # coef: torch.Tensor = self.coefficient[str((x_way, y_way, z_way))]
+            output_tensor = _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way) #* coef
             if z_way not in output_tensors:
                 output_tensors[z_way] = output_tensor
             else:

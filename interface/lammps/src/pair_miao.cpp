@@ -246,7 +246,7 @@ void PairMIAO::compute(int eflag, int vflag)
     batch_data.insert("batch", batch_);
     batch_data.insert("ghost_neigh", ghost_neigh_);
 
-    torch::IValue output = module.forward({batch_data, properties, false});
+    torch::IValue output = module.forward(batch_data);
     results = c10::impl::toTypedDict<std::string, torch::Tensor>(output.toGenericDict());
 
     auto forces_tensor = results.at("forces_p").to(torch::kDouble).cpu().reshape({-1});

@@ -184,6 +184,14 @@ def parse_args():
         default="infer.pt",
         help="output",
     )
+    parser_freeze.add_argument(
+        "-p",
+        "--properties",
+        type=str,
+        nargs="+",
+        default=["energy", "forces"],
+        help="target properties"
+    )
     parsed_args = parser.parse_args()
     if parsed_args.command is None:
         print(__picture__)
