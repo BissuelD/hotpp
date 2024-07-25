@@ -71,8 +71,6 @@ def main(*args, model="model.pt", device="cpu", output="infer.pt",
                 new_weight[i] = value[n].data
             value.data = new_weight
     lammps_infer = torch.jit.script(fmodel)
-    print(lammps_infer)
-    lammps_infer = torch.jit.freeze(lammps_infer)
     lammps_infer.save(f'lammps-{output}')
 
 
