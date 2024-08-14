@@ -304,21 +304,24 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
         output_dim = expand_para(model_dict['nHidden'], model_dict['nLayer'] + model_dict['nSpinLayer'])
         max_m_way = expand_para(model_dict['maxMWay'], model_dict['nSpinLayer'])
         spin_radial_fn = SpinChebyshevPoly(spin_max=p_dict['maxSpin'], n_max=12)
-        model = SpinMiaoNet(embedding_layer=emb,
-                            spin_radial_fn=spin_radial_fn,
-                        radial_fn=radial_fn,
-                        n_layers=model_dict['nLayer'],
-                        n_spin_layers=model_dict['nSpinLayer'],
-                        max_r_way=max_r_way,
-                        max_m_way=max_m_way,
-                        max_out_way=max_out_way,
-                        output_dim=output_dim,
-                        activate_fn=model_dict['activateFn'],
-                        target_way=target_way,
-                        mean=mean,
-                        std=std,
-                        norm_factor=n_neighbor,
-                        ).to(p_dict['device'])
+        model = SpinMiaoNet(
+            embedding_layer=emb,
+            spin_radial_fn=spin_radial_fn,
+            radial_fn=radial_fn,
+            n_layers=model_dict['nLayer'],
+            n_spin_layers=model_dict['nSpinLayer'],
+            max_r_way=max_r_way,
+            max_m_way=max_m_way,
+            soc=model_dict['soc'],
+            max_out_way=max_out_way,
+            output_dim=output_dim,
+            activate_fn=model_dict['activateFn'],
+            target_way=target_way,
+            mean=mean,
+            std=std,
+            norm_factor=n_neighbor,
+            ).to(p_dict['device'])
+
     assert isinstance(model_dict['Repulsion'], int), "Repulsion should be int!"
     if model_dict['Repulsion'] > 0:
         model = MultiAtomicModule({'main': model, 

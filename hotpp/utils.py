@@ -78,7 +78,7 @@ def find_distances(batch_data  : Dict[str, torch.Tensor],) -> Tuple[torch.Tensor
     return batch_data['rij'], batch_data['dij'], batch_data['uij']
 
 
-def find_spin(batch_data  : Dict[str, torch.Tensor],) -> Tuple[torch.Tensor]:
+def find_spin(batch_data  : Dict[str, torch.Tensor],) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if 'mi' not in batch_data:
         batch_data['mi'] = torch.norm(batch_data['spin'], dim=-1)
     if 'si' not in batch_data:
