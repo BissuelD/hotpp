@@ -107,5 +107,4 @@ The contributors are:
 
 # Reference
 
-[1] 1. Wang, J. et al. E(n)-Equivariant Cartesian Tensor Passing Potential. Preprint at http://arxiv.org/abs/2402.15286 (2024).
- (https://arxiv.org/abs/2402.15286)
+[1] 1. Wang, J. et al. E(n)-Equivariant cartesian tensor message passing interatomic potential. Nat Commun 15, 7607 (2024).
