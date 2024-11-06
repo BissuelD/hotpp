@@ -184,6 +184,11 @@ def parse_args():
         default="infer.pt",
         help="output",
     )
+    parser_freeze.add_argument(
+        "--double",
+        action="store_true",
+        help="float64"
+    )
     parsed_args = parser.parse_args()
     if parsed_args.command is None:
         print(__picture__)

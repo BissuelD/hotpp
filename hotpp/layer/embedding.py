@@ -19,7 +19,7 @@ class AtomicOneHot(EmbeddingLayer):
         super().__init__()
         max_atomic_number = max(atomic_number)
         n_atomic_number = len(atomic_number)
-        weights = torch.zeros(max_atomic_number + 1, n_atomic_number)
+        weights = torch.zeros(max_atomic_number + 1, n_atomic_number, dtype=torch.get_default_dtype())
         for idx, z in enumerate(atomic_number):
             weights[z, idx] = 1.
         self.z_weights = nn.Embedding(max_atomic_number + 1, n_atomic_number)

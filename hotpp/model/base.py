@@ -31,7 +31,7 @@ class AtomicModule(nn.Module):
         #######################################
         if 'dipole' in output_tensors:
             batch_data['dipole_p'] = _scatter_add(output_tensors['dipole'], batch_data['batch'])
-        if 'polar_00' in output_tensors:
+        if 'polar_diag' in output_tensors:
             polar_diag = _scatter_add(output_tensors['polar_diag'], batch_data['batch'])
             polar_off_diagonal = _scatter_add(output_tensors['polar_off_diagonal'], batch_data['batch'])
             polar = polar_off_diagonal + polar_off_diagonal.transpose(1, 2)
@@ -46,7 +46,7 @@ class AtomicModule(nn.Module):
         else:
             site_energy = batch_data['n_atoms']
         if 'direct_forces' in output_tensors:
-            batch_data['forces_p'] = output_tensors['direct_forces']
+            batch_data['direct_forces_p'] = output_tensors['direct_forces']
         if ('site_energy' in properties) or ('energies' in properties):
             batch_data['site_energy_p'] = site_energy
         if 'energy' in properties:
@@ -88,12 +88,31 @@ class AtomicModule(nn.Module):
 class MultiAtomicModule(AtomicModule):
     def __init__(self, models: Dict[str, AtomicModule]) -> None:
         super().__init__()
+        self.target_way = None
+        for name, model in models.items():
+            if self.target_way is None:
+                self.target_way = model.target_way
+            assert self.target_way == model.target_way, f"{name} target way {model.target_way} is different from {self.target_way}"
         self.models = nn.ModuleDict(models)
 
     def calculate(self,
                   batch_data : Dict[str, torch.Tensor],
                   ) -> Dict[str, torch.Tensor]:
-        output_tensor = {'site_energy': torch.zeros_like(batch_data['atomic_number'], dtype=batch_data['coordinate'].dtype)}
+        output_tensors = {}
+        n_atoms = len(batch_data['atomic_number'])
+        n_dim = batch_data['coordinate'].shape[1]
+        device = batch_data['coordinate'].device
+        if 'site_energy' in self.target_way:
+            output_tensors['site_energy'] = torch.zeros((n_atoms), dtype=batch_data['coordinate'].dtype, device=device)
+        if 'direct_forces' in self.target_way:
+            output_tensors['direct_forces'] = torch.zeros((n_atoms, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
+        if 'dipole' in self.target_way:
+            output_tensors['dipole'] = torch.zeros((n_atoms, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
+        if 'polar_diag' in self.target_way:
+            output_tensors['polar_diag'] = torch.zeros((n_atoms), dtype=batch_data['coordinate'].dtype, device=device)
+            output_tensors['polar_off_diagonal'] = torch.zeros((n_atoms, n_dim, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
+
         for name, model in self.models.items():
-            output_tensor['site_energy'] += model.calculate(batch_data)['site_energy']
-        return output_tensor
+            for target in self.target_way:
+                output_tensors[target] += model.calculate(batch_data)[target]
+        return output_tensors

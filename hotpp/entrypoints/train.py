@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.optim.swa_utils import AveragedModel
 from ase.data import atomic_numbers
 from ..utils import setup_seed, expand_para
-from ..model import MiaoNet, MiaoMiaoNet, LitAtomicModule, MultiAtomicModule, TwoBody, SpinMiaoNet
+from ..model import MiaoNet, MiaoMiaoNet, LitAtomicModule, MultiAtomicModule, TwoBody, SpinMiaoNet, GroundEnergy
 from ..layer.cutoff import *
 from ..layer.embedding import AtomicEmbedding
 from ..layer.radial import *
@@ -131,7 +131,6 @@ class LogAllLoss(pl.Callback):
             loss_metrics = trainer.callback_metrics
             self.train_loss['total'].append(np.sqrt(loss_metrics['train_loss'].detach().cpu().numpy()))
             for prop in self.properties:
-                prop = "forces" if prop == "direct_forces" else prop
                 self.train_loss[prop].append(np.sqrt(loss_metrics[f'train_{prop}'].detach().cpu().numpy()))
 
     def on_validation_epoch_end(self, trainer, pl_module):
@@ -150,7 +149,6 @@ class LogAllLoss(pl.Callback):
             val_loss = np.sqrt(loss_metrics['val_loss'].detach().cpu().numpy())
             content = f"{epoch:^10}|{step:^10}|{lr:^10.2e}|{train_loss:^10.4f}/{val_loss:^10.4f}"
             for prop in self.properties:
-                prop = "forces" if prop == "direct_forces" else prop
                 train_prop_loss = np.mean(self.train_loss[prop])
                 val_prop_loss = np.sqrt(loss_metrics[f'val_{prop}'].detach().cpu().numpy())
                 content += f"|{train_prop_loss:^10.4f}/{val_prop_loss:^10.4f}"
@@ -169,37 +167,37 @@ def update_dict(d1, d2):
 
 def get_stats(data_dict, dataset):
 
-    if type(data_dict["mean"]) is float:
-        mean = data_dict["mean"]
-    else:
-        try:
-            mean = dataset.per_energy_mean.detach().cpu().numpy()
-        except:
-            mean = 0.
-
-    if data_dict["std"] == "force":
-        std = dataset.forces_std.detach().cpu().numpy()
-    elif data_dict["std"] == "energy":
-        std = dataset.per_energy_std.detach().cpu().numpy()
-    else:
-        assert type(data_dict["std"]) is float, "std must be 'force', 'energy' or a float!" 
-        std = data_dict["std"]
-
     if type(data_dict["nNeighbor"]) is float:
         n_neighbor = data_dict["nNeighbor"]
     else:
-        n_neighbor = dataset.n_neighbor_mean.detach().cpu().numpy()
+        n_neighbor = float(dataset.n_neighbor_mean)
 
     if isinstance(data_dict["elements"], list):
         elements = data_dict["elements"]
     else:
-        elements = list(dataset.all_elements.detach().cpu().numpy())
+        elements = dataset.all_elements
 
-    log.info(f"mean  : {mean}")
-    log.info(f"std   : {std}")
+    if type(data_dict["mean"]) is float:
+        ground_energy = [data_dict["mean"]] * len(elements)
+    else:
+        try:
+            ground_energy = dataset.ground_energy
+        except:
+            ground_energy = [0.] * len(elements)
+
+    if type(data_dict["std"]) is float: 
+        std = data_dict["std"]
+    else:
+        try:
+            std = dataset.forces_std
+        except:
+            std = 1.
+
     log.info(f"n_neighbor   : {n_neighbor}")
     log.info(f"all_elements : {elements}")
-    return mean, std, n_neighbor, elements
+    log.info(f"ground_energy  : {ground_energy}")
+    log.info(f"std   : {std}")
+    return ground_energy, std, n_neighbor, elements
 
 
 def get_cutoff(p_dict):
@@ -242,7 +240,7 @@ def get_radial(p_dict, cutoff_fn):
         return radial_fn
 
 
-def get_model(p_dict, elements, mean, std, n_neighbor):
+def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
     model_dict = p_dict['Model']
     target = p_dict['Train']['targetProp']
     target_way = {}
@@ -254,7 +252,6 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
         target_way["polar_diag"] = 0
         target_way["polar_off_diagonal"] = 2
     if "direct_forces" in target:
-        assert "forces" not in target_way, "Cannot learn forces and direct_forces at the same time"
         target_way["direct_forces"] = 1
     cut_fn = get_cutoff(p_dict)
     emb = AtomicEmbedding(elements, model_dict['nEmbedding'])  # only support atomic embedding now
@@ -320,13 +317,16 @@ def get_model(p_dict, elements, mean, std, n_neighbor):
                         norm_factor=n_neighbor,
                         ).to(p_dict['device'])
     assert isinstance(model_dict['Repulsion'], int), "Repulsion should be int!"
+    module_dict = {'main': model}
+    if "site_energy" in target_way:
+        module_dict['ground_energy'] = GroundEnergy(atomic_number=elements, ground_energy=ground_energy)
     if model_dict['Repulsion'] > 0:
-        model = MultiAtomicModule({'main': model, 
-                                   'repulsion': TwoBody(embedding_layer=emb,
-                                                        cutoff_fn=cut_fn,
-                                                        k_max=model_dict['Repulsion'])})
+        assert "site_energy" in target_way, "Only support 'repulsion' when learning energy"
+        module_dict['repulsion'] = TwoBody(embedding_layer=emb,
+                                           cutoff_fn=cut_fn,
+                                           k_max=model_dict['Repulsion'])
 
-    return model
+    return MultiAtomicModule(module_dict)
 
 
 def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, **kwargs):
@@ -352,13 +352,16 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
     log.info(f"Preparing data...")
     dataset = LitAtomsDataset(p_dict)
     dataset.setup()
-    mean, std, n_neighbor, elements = get_stats(p_dict["Data"], dataset)
+    ground_energy, std, n_neighbor, elements = get_stats(p_dict["Data"], dataset)
 
     if load_model is not None and 'ckpt' not in load_model:
         log.info(f"Load model from {load_model}")
         model = torch.load(load_model)
     else:
-        model = get_model(p_dict, elements, mean, std, n_neighbor)
+        ## TODO
+        # mean and ground energy?
+        mean = 0.
+        model = get_model(p_dict, elements, mean, ground_energy, std, n_neighbor)
         model.register_buffer('all_elements', torch.tensor(elements, dtype=torch.long))
         model.register_buffer('cutoff', torch.tensor(p_dict["cutoff"], dtype=torch.float64))
 

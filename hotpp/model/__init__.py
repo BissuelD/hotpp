@@ -5,3 +5,4 @@ from .miaomiao import MiaoMiaoNet
 from .model_interface import LitAtomicModule
 from .base import MultiAtomicModule
 from .repulsion import TwoBody
+from .ground_energy import GroundEnergy
