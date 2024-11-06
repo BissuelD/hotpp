@@ -73,7 +73,8 @@ class AtomsDataset(Dataset, abc.ABC):
             'virial'      : (1, dim, dim),
             'dipole'      : (1, dim),
             'polarizability': (1, dim, dim),
-            'spin_torques': (len(atoms), dim), 
+            'spin_torques': (len(atoms), dim),
+            'direct_forces': (len(atoms), dim),
         }
         for key in properties:
             if key in atoms.info:
@@ -131,7 +132,8 @@ def atoms_collate_fn(batch):
         repeats=coll_batch["n_atoms"].to(torch.long),
         dim=0
     )
-
+    # coll_batch["n_batch"] = len(batch)
+    # coll_batch["n_dim"] = elem["coordinate"].shape[1]
     return coll_batch
 
 

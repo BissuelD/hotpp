@@ -37,8 +37,6 @@ class LitAtomicModule(pl.LightningModule):
         target = train_dict['targetProp']
         weight = train_dict['weight']
         weights = {p: w for p, w in zip(target, weight)}
-        if "direct_forces" in weights:
-            weights["forces"] = weights.pop("direct_forces") # direct forces use the same key of forces
         if train_dict['allowMissing']:
             # TODO: rewrite loss function
             if train_dict['forceScale'] > 0:

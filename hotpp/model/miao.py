@@ -1,3 +1,10 @@
+# TODO new save, something like
+# torch.save({
+#    'model_state_dict': model.state_dict(),
+#        'some_param': model.some_param  # 保存字典参数
+#        }, 'model_with_dict.pth')
+#
+
 from typing import Callable, List, Dict, Optional, Literal, Tuple
 import torch
 from torch import nn
@@ -159,6 +166,7 @@ class MiaoNet(AtomicModule):
         self.register_buffer("std", torch.tensor(std).float())
         self.embedding_layer = embedding_layer
         self.radial_fn = radial_fn
+        self.target_way = target_way
 
         max_in_way = [0] + max_out_way[:-1]
         hidden_nodes = [embedding_layer.n_channel] + output_dim

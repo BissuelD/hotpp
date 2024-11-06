@@ -6,7 +6,7 @@ from .utils import expand_to
 
 class Loss:
 
-    atom_prop = ["forces", "spin_torques"]
+    atom_prop = ["forces", "spin_torques", "direct_forces"]
     structure_prop = ["energy", "virial", "dipole", "polarizability"]
 
     def __init__(self,

@@ -2,8 +2,10 @@ import torch
 from ase.data import chemical_symbols, atomic_numbers
 
 
-def main(*args, model="model.pt", device="cpu", output="infer.pt", symbols=None, **kwargs):
+def main(*args, model="model.pt", device="cpu", output="infer.pt", symbols=None, double=False, **kwargs):
     model = torch.load(model, map_location=torch.device(device))
+    if double:
+        model = model.double()
     # change embedding layer
     if symbols is not None:
         all_elements = [atomic_numbers[s] for s in symbols]

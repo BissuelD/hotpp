@@ -72,3 +72,5 @@ class MiaoCalculator(Calculator):
             self.results["dipole"] = data["dipole_p"].detach().cpu().numpy()
         if "polarizability" in properties:
             self.results["polarizability"] = data["polarizability_p"].detach().cpu().numpy()
+        if "direct_forces" in properties:
+            self.results["polarizability"] = data["direct_forces_p"].detach().cpu().numpy()
