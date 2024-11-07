@@ -74,6 +74,7 @@ DefaultPara = {
             "maxEpoch": 10000,
             "maxStep": 1000000,
             "allowMissing": False,
+            "huberDelta": -1.0,
             "targetProp": ["energy", "forces"],
             "weight": [0.1, 1.0],
             "forceScale": 0.,

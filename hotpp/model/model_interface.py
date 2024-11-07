@@ -1,6 +1,6 @@
 from typing import Optional, Dict, List, Type, Any
 from .base import AtomicModule
-from ..loss import Loss, MissingValueLoss, ForceScaledLoss
+from ..loss import Loss, MissingValueLoss, ForceScaledLoss, MACEHuberLoss
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -42,6 +42,8 @@ class LitAtomicModule(pl.LightningModule):
             if train_dict['forceScale'] > 0:
                 raise Exception("Now forceScale not support allowMissing!")
             return MissingValueLoss(weights, loss_fn=F.mse_loss)
+        elif train_dict['huberDelta'] > 0:
+            return MACEHuberLoss(weights, huber_delta=train_dict['huberDelta'])
         else:
             if train_dict['forceScale'] > 0:
                 return ForceScaledLoss(weights, loss_fn=F.mse_loss, scaled=train_dict['forceScale'])
