@@ -11,9 +11,9 @@ from ..layer.equivalent import NonLinearLayer, GraphConvLayer, SelfInteractionLa
 from ..utils import find_distances, _scatter_add, res_add, find_spin, find_moment, find_spin_moment, expand_to
 from .miao import MiaoBlock
 
-    
+
 class SOCSpinConvLayer(nn.Module):
-    def __init__(self, 
+    def __init__(self,
                  radial_fn      : RadialLayer,
                  spin_radial_fn : RadialLayer,
                  input_dim      : int,
@@ -80,9 +80,9 @@ class SOCSpinConvLayer(nn.Module):
 
         return self.node_spinr_product(node, spinr)
 
-    
+
 class SpinConvLayer(nn.Module):
-    def __init__(self, 
+    def __init__(self,
                  radial_fn      : RadialLayer,
                  spin_radial_fn : RadialLayer,
                  input_dim      : int,
@@ -238,6 +238,7 @@ class SpinMiaoNet(AtomicModule):
         self.register_buffer("std", torch.tensor(std).float())
         self.embedding_layer = embedding_layer
         self.radial_fn = radial_fn
+        self.target_way = target_way
 
         max_in_way = [0] + max_out_way[1:]
         hidden_nodes = [embedding_layer.n_channel] + output_dim

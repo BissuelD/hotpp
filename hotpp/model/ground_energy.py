@@ -14,6 +14,7 @@ class GroundEnergy(AtomicModule):
                  ) -> None:
         super().__init__()
         self.n_channel = 1
+        self.target_way = {"site_energy": 0}
         self.one_hot = AtomicOneHot(atomic_number, trainable=False)
         self.register_buffer("ground_energy",
                              torch.tensor(ground_energy, dtype=torch.get_default_dtype()))
