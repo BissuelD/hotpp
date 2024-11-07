@@ -167,6 +167,14 @@ def update_dict(d1, d2):
 
 
 def get_stats(data_dict, dataset):
+    if data_dict["meta"] is not None:
+        with open(data_dict["meta"]) as f:
+            stats = yaml.load(f, Loader=yaml.FullLoader)
+        n_neighbor = stats["nNeighbor"]
+        elements = stats["elements"]
+        ground_energy = stats["ground_energy"]
+        std = stats["std"]
+        return ground_energy, std, n_neighbor, elements
 
     if type(data_dict["nNeighbor"]) is float:
         n_neighbor = data_dict["nNeighbor"]
