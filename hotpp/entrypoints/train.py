@@ -41,6 +41,7 @@ DefaultPara = {
             "numWorkers": 0,
             "pinMemory": False,
             "batchType": "structure",
+            "meta": None,
         },
         "Model": {
             "net": "miao",
@@ -174,33 +175,32 @@ def get_stats(data_dict, dataset):
         elements = stats["elements"]
         ground_energy = stats["ground_energy"]
         std = stats["std"]
-        return ground_energy, std, n_neighbor, elements
-
-    if type(data_dict["nNeighbor"]) is float:
-        n_neighbor = data_dict["nNeighbor"]
     else:
-        n_neighbor = float(dataset.n_neighbor_mean)
+        if type(data_dict["nNeighbor"]) is float:
+            n_neighbor = data_dict["nNeighbor"]
+        else:
+            n_neighbor = float(dataset.n_neighbor_mean)
 
-    if isinstance(data_dict["elements"], list):
-        elements = data_dict["elements"]
-    else:
-        elements = dataset.all_elements
+        if isinstance(data_dict["elements"], list):
+            elements = data_dict["elements"]
+        else:
+            elements = dataset.all_elements
 
-    if type(data_dict["mean"]) is float:
-        ground_energy = [data_dict["mean"]] * len(elements)
-    else:
-        try:
-            ground_energy = dataset.ground_energy
-        except:
-            ground_energy = [0.] * len(elements)
+        if type(data_dict["mean"]) is float:
+            ground_energy = [data_dict["mean"]] * len(elements)
+        else:
+            try:
+                ground_energy = dataset.ground_energy
+            except:
+                ground_energy = [0.] * len(elements)
 
-    if type(data_dict["std"]) is float: 
-        std = data_dict["std"]
-    else:
-        try:
-            std = dataset.forces_std
-        except:
-            std = 1.
+        if type(data_dict["std"]) is float: 
+            std = data_dict["std"]
+        else:
+            try:
+                std = dataset.forces_std
+            except:
+                std = 1.
 
     log.info(f"n_neighbor   : {n_neighbor}")
     log.info(f"all_elements : {elements}")
