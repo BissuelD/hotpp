@@ -11,73 +11,75 @@ from ..layer.equivalent import NonLinearLayer, GraphConvLayer, SelfInteractionLa
 from ..utils import find_distances, _scatter_add, res_add, find_spin, find_moment, find_spin_moment, expand_to
 from .miao import MiaoBlock
 
-
-# class SpinConvLayer(nn.Module):
-#     def __init__(self, 
-#                  radial_fn      : RadialLayer,
-#                  spin_radial_fn : RadialLayer,
-#                  input_dim      : int,
-#                  output_dim     : int,
-#                  max_in_way     : int=2,
-#                  max_r_way      : int=2,
-#                  max_m_way      : int=2,
-#                  max_out_way    : int=2,
-#                  conv_mode      : Literal['node_j', 'node_edge']='node_j',
-#                  ) -> None:
-#         super().__init__()
-#         self.radial_fn = radial_fn
-#         self.spin_radial_fn = spin_radial_fn
-#         self.rbf_mixing_list = nn.ModuleList([
-#             nn.Linear(radial_fn.n_channel, output_dim, bias=False)
-#             for r_way in range(max_r_way + 1)
-#         ])
-#         self.spin_rbf_mixing_list = nn.ModuleList([
-#             nn.Linear(spin_radial_fn.n_channel, output_dim, bias=False)
-#             for m_way in range(max_m_way + 1)
-#         ])
-#         self.U = SelfInteractionLayer(input_dim=input_dim,
-#                                       max_way=max_in_way,
-#                                       output_dim=output_dim)
-#         # self.spin_spin_product = TensorProductLayer(max_x_way=max_m_way,
-#         #                                             max_y_way=max_m_way,
-#         #                                             max_z_way=max_m_way)
-#         # self.node_spin_product = TensorProductLayer(max_x_way=max_in_way,
-#         #                                             max_y_way=max_m_way,
-#         #                                             max_z_way=max_out_way)
-#         # self.nodespin_r_product = TensorProductLayer(max_x_way=max_out_way,
-#         #                                          max_y_way=max_r_way,
-#         #                                          max_z_way=max_out_way)
-#         self.max_in_way = max_in_way
-
-#     def forward(self,
-#                 node_info  : Dict[int, torch.tensor],
-#                 edge_info  : Dict[int, torch.tensor],
-#                 batch_data : Dict[str, torch.tensor]):
-#         idx_i = batch_data['idx_i']
-#         idx_j = batch_data['idx_j']
-#         _, dij, _ = find_distances(batch_data)
-#         rbf_ij = self.radial_fn(dij)
-#         mi, _ = find_spin(batch_data)
-#         spin_rbf_i = self.spin_radial_fn(mi)
-#         node = {}
-#         for in_way in range(self.max_in_way + 1):
-#             node[in_way] = node_info[in_way][idx_j]
-#         node = self.U(node)
-
-#         spin_i, spin_j = {}, {}
-#         for m_way, spin_rbf_mixing in enumerate(self.spin_rbf_mixing_list):
-#             spin_m = find_spin_moment(batch_data, m_way).unsqueeze(1) * \
-#                 expand_to(spin_rbf_mixing(spin_rbf_i), n_dim=m_way + 2)
-#             spin_i[m_way] = spin_m[idx_i]
-#             spin_j[m_way] = spin_m[idx_j]
-#         spin = self.spin_spin_product(spin_i, spin_j)
-#         nodespin = self.node_spin_product(node, spin)
-#         r = {}
-#         for r_way, rbf_mixing in enumerate(self.rbf_mixing_list):
-#             r[r_way] = find_moment(batch_data, r_way).unsqueeze(1) * \
-#                 expand_to(rbf_mixing(rbf_ij), n_dim=r_way + 2)
-#         return self.nodespin_r_product(nodespin, r)
     
+class SOCSpinConvLayer(nn.Module):
+    def __init__(self, 
+                 radial_fn      : RadialLayer,
+                 spin_radial_fn : RadialLayer,
+                 input_dim      : int,
+                 output_dim     : int,
+                 max_in_way     : int=2,
+                 max_r_way      : int=2,
+                 max_m_way      : int=2,
+                 max_out_way    : int=2,
+                 ) -> None:
+        super().__init__()
+        self.radial_fn = radial_fn
+        self.spin_radial_fn = spin_radial_fn
+        self.rbf_mixing_list = nn.ModuleList([
+            nn.Linear(radial_fn.n_channel, output_dim, bias=False)
+            for r_way in range(max_r_way + 1)
+        ])
+        self.spin_rbf_mixing_list = nn.ModuleList([
+            nn.Linear(spin_radial_fn.n_channel, output_dim, bias=False)
+            for m_way in range(max_m_way + 1)
+        ])
+        self.U = SelfInteractionLayer(input_dim=input_dim,
+                                      max_way=max_in_way,
+                                      output_dim=output_dim)
+        self.spin_spin_product = TensorProductLayer(max_x_way=max_m_way,
+                                                    max_y_way=max_m_way,
+                                                    max_z_way=max_m_way)
+        self.spin_r_product = TensorProductLayer(max_x_way=max_m_way,
+                                                 max_y_way=max_r_way,
+                                                 max_z_way=max_out_way)
+        self.node_spinr_product = TensorProductLayer(max_x_way=max_in_way,
+                                                     max_y_way=max_out_way,
+                                                     max_z_way=max_out_way)
+        self.max_in_way = max_in_way
+
+    def forward(self,
+                node_info  : Dict[int, torch.tensor],
+                edge_info  : Dict[int, torch.tensor],
+                batch_data : Dict[str, torch.tensor]):
+        idx_i = batch_data['idx_i']
+        idx_j = batch_data['idx_j']
+        _, dij, _ = find_distances(batch_data)
+        rbf_ij = self.radial_fn(dij)
+        mi, _, _ = find_spin(batch_data)
+        spin_rbf_i = self.spin_radial_fn(mi)
+
+        spin_i, spin_j = {}, {}
+        for m_way, spin_rbf_mixing in enumerate(self.spin_rbf_mixing_list):
+            spin_m = find_spin_moment(batch_data, m_way).unsqueeze(1) * \
+                expand_to(spin_rbf_mixing(spin_rbf_i), n_dim=m_way + 2)
+            spin_i[m_way] = spin_m[idx_i]
+            spin_j[m_way] = spin_m[idx_j]
+        spin = self.spin_spin_product(spin_i, spin_j)
+
+        r = {}
+        for r_way, rbf_mixing in enumerate(self.rbf_mixing_list):
+            r[r_way] = find_moment(batch_data, r_way).unsqueeze(1) * \
+                expand_to(rbf_mixing(rbf_ij), n_dim=r_way + 2)
+        spinr = self.spin_r_product(spin, r)
+
+        node = {}
+        for in_way in range(self.max_in_way + 1):
+            node[in_way] = node_info[in_way][idx_j]
+        node = self.U(node)
+
+        return self.node_spinr_product(node, spinr)
+
     
 class SpinConvLayer(nn.Module):
     def __init__(self, 
@@ -87,7 +89,6 @@ class SpinConvLayer(nn.Module):
                  output_dim     : int,
                  max_in_way     : int=2,
                  max_r_way      : int=2,
-                 max_m_way      : int=2,
                  max_out_way    : int=2,
                  ) -> None:
         super().__init__()
@@ -152,24 +153,38 @@ class SpinMiaoBlock(nn.Module):
                  radial_fn      : RadialLayer,
                  spin_radial_fn : RadialLayer,
                  max_r_way      : int,
-                 max_m_way      : int,
                  max_in_way     : int,
                  max_out_way    : int,
                  input_dim      : int,
                  output_dim     : int,
                  norm_factor    : float=1.0,
                  activate_fn    : str='silu',
+                 soc            : bool=False,
+                 max_m_way      : Optional[int]=None,
                  ) -> None:
         super().__init__()
-        self.graph_conv = SpinConvLayer(radial_fn=radial_fn,
-                                        spin_radial_fn=spin_radial_fn,
-                                        input_dim=input_dim,
-                                        output_dim=output_dim,
-                                        max_in_way=max_in_way,
-                                        max_out_way=max_out_way,
-                                        max_r_way=max_r_way,
-                                        max_m_way=max_m_way,
-                                        )
+        if soc:
+            self.graph_conv = SOCSpinConvLayer(
+                radial_fn=radial_fn,
+                spin_radial_fn=spin_radial_fn,
+                input_dim=input_dim,
+                output_dim=output_dim,
+                max_in_way=max_in_way,
+                max_out_way=max_out_way,
+                max_r_way=max_r_way,
+                max_m_way=max_m_way,
+                )
+        else:
+            self.graph_conv = SpinConvLayer(
+                radial_fn=radial_fn,
+                spin_radial_fn=spin_radial_fn,
+                input_dim=input_dim,
+                output_dim=output_dim,
+                max_in_way=max_in_way,
+                max_out_way=max_out_way,
+                max_r_way=max_r_way,
+                )
+
         self.self_interact = SelfInteractionLayer(input_dim=input_dim,
                                                   max_way=max_out_way,
                                                   output_dim=output_dim)
@@ -215,6 +230,7 @@ class SpinMiaoNet(AtomicModule):
                  bilinear        : bool=False,
                  conv_mode       : Literal['node_j', 'node_edge']='node_j',
                  update_edge     : bool=False,
+                 soc             : bool=False,
                  ):
         super().__init__()
 
@@ -240,18 +256,20 @@ class SpinMiaoNet(AtomicModule):
                       ) for i in range(n_layers)])
 
         self.en_equivalent_spin_blocks = nn.ModuleList([
-            SpinMiaoBlock(activate_fn=activate_fn,
-                      radial_fn=radial_fn.replicate(),
-                      spin_radial_fn=spin_radial_fn.replicate(),
-                      # Use factory method, so the radial_fn in each layer are different
-                      max_r_way=max_r_way[i + n_layers],
-                      max_m_way=max_m_way[i],
-                      max_in_way=max_in_way[i + n_layers],
-                      max_out_way=max_out_way[i + n_layers],
-                      input_dim=hidden_nodes[i + n_layers],
-                      output_dim=hidden_nodes[i + n_layers + 1],
-                      norm_factor=norm_factor,
-                      ) for i in range(n_spin_layers)])
+            SpinMiaoBlock(
+                activate_fn=activate_fn,
+                radial_fn=radial_fn.replicate(),
+                spin_radial_fn=spin_radial_fn.replicate(),
+                # Use factory method, so the radial_fn in each layer are different
+                max_r_way=max_r_way[i + n_layers],
+                max_m_way=max_m_way[i],
+                max_in_way=max_in_way[i + n_layers],
+                max_out_way=max_out_way[i + n_layers],
+                input_dim=hidden_nodes[i + n_layers],
+                output_dim=hidden_nodes[i + n_layers + 1],
+                norm_factor=norm_factor,
+                soc=soc,
+                ) for i in range(n_spin_layers)])
         self.readout_layer = ReadoutLayer(n_dim=hidden_nodes[-1],
                                           target_way=target_way,
                                           activate_fn=activate_fn,
