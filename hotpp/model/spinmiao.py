@@ -1,5 +1,5 @@
 import site
-from typing import Callable, List, Dict, Optional, Literal
+from typing import Callable, List, Dict, Optional, Literal, Tuple
 from numpy import squeeze
 import torch
 from torch import nn
@@ -49,9 +49,9 @@ class SOCSpinConvLayer(nn.Module):
         self.max_in_way = max_in_way
 
     def forward(self,
-                node_info  : Dict[int, torch.tensor],
-                edge_info  : Dict[int, torch.tensor],
-                batch_data : Dict[str, torch.tensor]):
+                node_info  : Dict[int, torch.Tensor],
+                edge_info  : Dict[int, torch.Tensor],
+                batch_data : Dict[str, torch.Tensor]):
         idx_i = batch_data['idx_i']
         idx_j = batch_data['idx_j']
         _, dij, _ = find_distances(batch_data)
@@ -59,7 +59,7 @@ class SOCSpinConvLayer(nn.Module):
         mi, _, _ = find_spin(batch_data)
         spin_rbf_i = self.spin_radial_fn(mi)
 
-        spin_i, spin_j = {}, {}
+        spin_i, spin_j = torch.jit.annotate(Dict[int, torch.Tensor], {}), torch.jit.annotate(Dict[int, torch.Tensor], {})
         for m_way, spin_rbf_mixing in enumerate(self.spin_rbf_mixing_list):
             spin_m = find_spin_moment(batch_data, m_way).unsqueeze(1) * \
                 expand_to(spin_rbf_mixing(spin_rbf_i), n_dim=m_way + 2)
@@ -67,13 +67,13 @@ class SOCSpinConvLayer(nn.Module):
             spin_j[m_way] = spin_m[idx_j]
         spin = self.spin_spin_product(spin_i, spin_j)
 
-        r = {}
+        r = torch.jit.annotate(Dict[int, torch.Tensor], {})
         for r_way, rbf_mixing in enumerate(self.rbf_mixing_list):
             r[r_way] = find_moment(batch_data, r_way).unsqueeze(1) * \
                 expand_to(rbf_mixing(rbf_ij), n_dim=r_way + 2)
         spinr = self.spin_r_product(spin, r)
 
-        node = {}
+        node = torch.jit.annotate(Dict[int, torch.Tensor], {})
         for in_way in range(self.max_in_way + 1):
             node[in_way] = node_info[in_way][idx_j]
         node = self.U(node)
@@ -122,9 +122,9 @@ class SpinConvLayer(nn.Module):
         self.max_in_way = max_in_way
 
     def forward(self,
-                node_info  : Dict[int, torch.tensor],
-                edge_info  : Dict[int, torch.tensor],
-                batch_data : Dict[str, torch.tensor]):
+                node_info  : Dict[int, torch.Tensor],
+                edge_info  : Dict[int, torch.Tensor],
+                batch_data : Dict[str, torch.Tensor]):
         idx_i = batch_data['idx_i']
         idx_j = batch_data['idx_j']
         n_edge = len(idx_i)
@@ -132,13 +132,13 @@ class SpinConvLayer(nn.Module):
         rbf_ij = self.radial_fn(dij)
         mi, si, sij = find_spin(batch_data)
         spin_rbf_i = self.spin_radial_fn(mi)
-        node = {}
+        node = torch.jit.annotate(Dict[int, torch.Tensor], {})
         for in_way in range(self.max_in_way + 1):
             node[in_way] = node_info[in_way][idx_j]
         node = self.U(node)
 
         spin_basis = self.sij_basis_fn(sij)    # [n_edge, n_cheb]
-        r = {}
+        r = torch.jit.annotate(Dict[int, torch.Tensor], {})
         for way, (rbf_mixing, spin_rbf_mixing) in enumerate(zip(self.rbf_mixing_list, self.spin_rbf_mixing_list)):
             sb = spin_rbf_mixing(spin_rbf_i)      # [n_node, n_channel]
             hehe = rbf_mixing(rbf_ij) * sb[idx_i] * sb[idx_j]     # f(rij)g(mi)g(mj)  [n_edge, n_channel]
@@ -197,10 +197,10 @@ class SpinMiaoBlock(nn.Module):
                 node_info    : Dict[int, torch.Tensor],
                 edge_info    : Dict[int, torch.Tensor],
                 batch_data   : Dict[str, torch.Tensor],
-                ) -> Dict[int, torch.Tensor]:
+                ) -> Tuple[Dict[int, torch.Tensor], Dict[int, torch.Tensor]]:
         if len(batch_data['idx_i']) > 0:
             message = self.graph_conv(node_info=node_info, edge_info=edge_info, batch_data=batch_data)
-            res_info = {}
+            res_info = torch.jit.annotate(Dict[int, torch.Tensor], {})
             idx_i = batch_data["idx_i"]
             n_atoms = batch_data['atomic_number'].shape[0]
             for way in message.keys():
