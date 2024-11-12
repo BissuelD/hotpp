@@ -262,6 +262,8 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
         target_way["polar_off_diagonal"] = 2
     if "direct_forces" in target:
         target_way["direct_forces"] = 1
+    if "direct_stress" in target:
+        target_way["direct_stress"] = 2
     cut_fn = get_cutoff(p_dict)
     emb = AtomicEmbedding(elements, model_dict['nEmbedding'])  # only support atomic embedding now
     radial_fn = get_radial(p_dict, cut_fn)

@@ -75,6 +75,7 @@ class AtomsDataset(Dataset, abc.ABC):
             'polarizability': (1, dim, dim),
             'spin_torques': (len(atoms), dim),
             'direct_forces': (len(atoms), dim),
+            'direct_stress': (1, dim, dim),
         }
         for key in properties:
             if key in atoms.info:

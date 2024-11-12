@@ -191,6 +191,8 @@ class MiaoNet(AtomicModule):
             output_tensors['site_energy'] = output_tensors['site_energy'] * self.std + self.mean
         if 'direct_forces' in output_tensors:
             output_tensors['direct_forces'] = output_tensors['direct_forces'] * self.std
+        if 'direct_stress' in output_tensors:
+            output_tensors['direct_stress'] = output_tensors['direct_stress'] * self.std
         return output_tensors
 
     def get_init_info(self,

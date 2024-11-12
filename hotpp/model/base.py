@@ -47,6 +47,8 @@ class AtomicModule(nn.Module):
             site_energy = batch_data['n_atoms']
         if 'direct_forces' in output_tensors:
             batch_data['direct_forces_p'] = output_tensors['direct_forces']
+        if 'direct_stress' in output_tensors:
+            batch_data['direct_stress_p'] = _scatter_add(output_tensors['direct_stress'], batch_data['batch'])
         if ('site_energy' in properties) or ('energies' in properties):
             batch_data['site_energy_p'] = site_energy
         if 'energy' in properties:
@@ -106,6 +108,8 @@ class MultiAtomicModule(AtomicModule):
             output_tensors['site_energy'] = torch.zeros((n_atoms), dtype=batch_data['coordinate'].dtype, device=device)
         if 'direct_forces' in self.target_way:
             output_tensors['direct_forces'] = torch.zeros((n_atoms, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
+        if 'direct_stress' in self.target_way:
+            output_tensors['direct_stress'] = torch.zeros((n_atoms, n_dim, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
         if 'dipole' in self.target_way:
             output_tensors['dipole'] = torch.zeros((n_atoms, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
         if 'polar_diag' in self.target_way:
