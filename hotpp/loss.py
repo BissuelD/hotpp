@@ -96,3 +96,68 @@ class MissingValueLoss(Loss):
         weight = batch_data[f'{prop}_weight'] / expand_to(batch_data['n_atoms'], len(batch_data[f'{prop}_p'].shape))
         return self.loss_fn(batch_data[f'{prop}_p'] * weight,
                             batch_data[f'{prop}_t'] * weight)
+
+
+class MACEHuberLoss(Loss):
+    """ 
+    Only support energy, forces, and virials, use the same setting as universal model of MACE:
+    Batatia, I. et al. A foundation model for atomistic materials chemistry. 
+    Preprint at https://doi.org/10.48550/arXiv.2401.00096 (2024).
+    """
+
+    def __init__(self,
+                 weight  : Dict[str, float]={"energy": 1.0, "forces": 10.0},
+                 huber_delta  : float=0.01,
+                 ) -> None:
+        super().__init__(weight, loss_fn=F.huber_loss)
+        self.huber_delta = huber_delta
+
+    def get_loss(self,
+                 batch_data : Dict[str, torch.Tensor],
+                 verbose    : bool=False):
+        loss = {}
+        total_loss = 0.
+        for prop in self.weight:
+            if prop == "energy":
+                loss["energy"] = self.loss_fn(
+                    batch_data['energy_p'] / batch_data['n_atoms'], 
+                    batch_data['energy_t'] / batch_data['n_atoms'],
+                    reduction="mean", delta=self.huber_delta
+                    )
+            elif prop == "forces":
+                loss["forces"] = self.conditional_huber_forces(
+                    batch_data['forces_p'], batch_data['forces_t'],
+                    )
+            elif prop == "virial":
+                loss["virial"] = self.loss_fn(
+                    batch_data['virial_p'] / batch_data['n_atoms'], 
+                    batch_data['virial_t'] / batch_data['n_atoms'],
+                    reduction="mean", delta=self.huber_delta
+                    )
+            total_loss += loss[prop] * self.weight[prop]
+        if verbose:
+            return total_loss, loss
+        return total_loss
+
+    def conditional_huber_forces(self,
+                                 pred_forces: torch.Tensor,
+                                 ref_forces: torch.Tensor, 
+                                 ) -> torch.Tensor:
+        factors = self.huber_delta * torch.tensor([1.0, 0.7, 0.4, 0.1])
+        c1 = torch.norm(ref_forces, dim=-1) < 100
+        c2 = (torch.norm(ref_forces, dim=-1) >= 100) & (
+            torch.norm(ref_forces, dim=-1) < 200
+        )
+        c3 = (torch.norm(ref_forces, dim=-1) >= 200) & (
+            torch.norm(ref_forces, dim=-1) < 300
+        )
+        c4 = ~(c1 | c2 | c3)
+
+        se = torch.zeros_like(pred_forces)
+
+        se[c1] = self.loss_fn(ref_forces[c1], pred_forces[c1], reduction="none", delta=factors[0])
+        se[c2] = self.loss_fn(ref_forces[c2], pred_forces[c2], reduction="none", delta=factors[1])
+        se[c3] = self.loss_fn(ref_forces[c3], pred_forces[c3], reduction="none", delta=factors[2])
+        se[c4] = self.loss_fn(ref_forces[c4], pred_forces[c4], reduction="none", delta=factors[3])
+
+        return torch.mean(se)

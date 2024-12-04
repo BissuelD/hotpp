@@ -2,8 +2,9 @@ from ase.io import read
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from ..data import ASEData, ASEDBData, atoms_collate_fn
+from ..data import ASEData, ASEDBData, atoms_collate_fn, RevisedMD17, DeePMDData
 from tqdm import tqdm
+import os
 
 
 def eval(model, data_loader, properties, device):
@@ -34,20 +35,32 @@ def main(*args, modelfile='model.pt', indices=None, device='cpu', datafile='data
     cutoff = float(model.cutoff.detach().cpu().numpy())
     if indices is not None:
         indices = np.loadtxt(indices, dtype=int)
-
-    if '.db' in datafile:
-        dataset = ASEDBData(datapath=datafile,
-                            indices=indices,
-                            properties=properties,
-                            cutoff=cutoff, 
-                            spin=spin)
+    if format == "rmd17":
+        dataset = RevisedMD17(root=os.path.dirname(datafile),
+                              name=os.path.basename(datafile),
+                              indices=indices,
+                              cutoff=cutoff)
+    elif format == "dpmd":
+        dataset = DeePMDData(
+                path_list=[datafile],
+                properties=properties,
+                cutoff=cutoff,
+                spin=spin,
+                )
     else:
-        frames = read(datafile, index=':', format=format)
-        dataset = ASEData(frames=frames,
-                          indices=indices,
-                          cutoff=cutoff,
-                          properties=properties,
-                          spin=spin)
+        if '.db' in datafile:
+            dataset = ASEDBData(datapath=datafile,
+                                indices=indices,
+                                properties=properties,
+                                cutoff=cutoff,
+                                spin=spin)
+        else:
+            frames = read(datafile, index=':', format=format)
+            dataset = ASEData(frames=frames,
+                              indices=indices,
+                              cutoff=cutoff,
+                              properties=properties,
+                              spin=spin)
 
     data_loader = DataLoader(dataset,
                              batch_size=batchsize,

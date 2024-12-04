@@ -7,8 +7,16 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 import torch.nn.functional as F
 from torch.optim.swa_utils import AveragedModel
 from ase.data import atomic_numbers
-from ..utils import setup_seed, expand_para
-from ..model import MiaoNet, MiaoMiaoNet, LitAtomicModule, MultiAtomicModule, TwoBody, SpinMiaoNet, GroundEnergy
+from ..utils import setup_seed, expand_para, EnvPara
+from ..model import (
+    MiaoNet,
+    MiaoMiaoNet,
+    LitAtomicModule,
+    MultiAtomicModule,
+    TwoBody,
+    SpinMiaoNet,
+    GroundEnergy,
+)
 from ..layer.cutoff import *
 from ..layer.embedding import AtomicEmbedding
 from ..layer.radial import *
@@ -17,97 +25,113 @@ from ..data import LitAtomsDataset
 
 # 别管Warning不Warning，只要能跑不就行
 import warnings
+
 warnings.filterwarnings(action='ignore', message='Checkpoint directory')
 warnings.filterwarnings(action='ignore', message='Mean of empty slice')
 warnings.filterwarnings(action='ignore', message='The dirpath has changed from')
-warnings.filterwarnings(action='ignore', message='invalid value encountered in double_scalars')
+warnings.filterwarnings(
+    action='ignore', message='invalid value encountered in double_scalars'
+)
 
 # torch.set_float32_matmul_precision("high")
 log = logging.getLogger(__name__)
 
 DefaultPara = {
-        "workDir": os.getcwd(),
-        "seed": np.random.randint(0, 100000000),
-        "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "outputDir": os.path.join(os.getcwd(), "outDir"),
-        "Data": {
-            "path": os.getcwd(),
-            "trainBatch": 32,
-            "testBatch": 32,
-            "std": "force",
-            "mean": None,
-            "nNeighbor": None,
-            "elements": None,
-            "numWorkers": 0,
-            "pinMemory": False,
-            "batchType": "structure",
+    "workDir": os.getcwd(),
+    "seed": np.random.randint(0, 100000000),
+    "device": "cuda" if torch.cuda.is_available() else "cpu",
+    "outputDir": os.path.join(os.getcwd(), "outDir"),
+    "precision": "float",
+    "Data": {
+        "path": os.getcwd(),
+        "trainBatch": 32,
+        "testBatch": 32,
+        "std": "force",
+        "mean": None,
+        "groundEnergy": None,
+        "nNeighbor": None,
+        "elements": None,
+        "numWorkers": 0,
+        "pinMemory": False,
+        "batchType": "structure",
+        "meta": None,
+    },
+    "Model": {
+        "net": "miao",
+        "convMode": "node_j",
+        "eleMode": "node_edge",
+        "updateEdge": "no_update",
+        "activateFn": "silu",
+        "nEmbedding": 64,
+        "nLayer": 5,
+        "maxRWay": 2,
+        "maxMWay": 2,
+        "maxOutWay": 2,
+        "maxNBody": 3,
+        "nHidden": 64,
+        "targetWay": {0: 'site_energy'},
+        "CutoffLayer": {
+            "type": "poly",
+            "p": 5,
         },
-        "Model": {
-            "net": "miao",
-            "convMode": "node_j",
-            "updateEdge": False,
-            "mode": "normal",
-            "bilinear": False,
+        "RadialLayer": {
+            "type": "besselMLP",
+            "nBasis": 8,
+            "nHidden": [64, 64, 64],
             "activateFn": "silu",
-            "nEmbedding": 64,
-            "nLayer": 5,
-            "maxRWay": 2,
-            "maxMWay": 2,
-            "maxOutWay": 2,
-            "maxNBody": 3,
-            "nHidden": 64,
-            "targetWay": {0 : 'site_energy'},
-            "CutoffLayer": {
-                "type": "poly",
-                "p": 5,
-            },
-            "RadialLayer": {
-                "type": "besselMLP",
-                "nBasis": 8,
-                "nHidden": [64, 64, 64],
-                "activateFn": "silu",
-            },
-            "Repulsion": 0,
-            "Spin": False,
         },
-        "Train": {
-            "maxEpoch": 10000,
-            "maxStep": 1000000,
-            "allowMissing": False,
-            "targetProp": ["energy", "forces"],
-            "weight": [0.1, 1.0],
-            "forceScale": 0.,
-            "evalStepInterval": 50,
-            "evalEpochInterval": 1,
-            "logInterval": 50,
-            "saveStart": 1000,
-            "evalTest": True,
-            "gradClip": None,
-            "Optimizer": {
-                "type": "Adam",
-                "amsGrad": True,
-                "weightDecay": 0.,
-                "learningRate": 0.01,
-                },
-            "LrScheduler": {
-                "type": "constant",
-            },
-            "emaDecay": 0.,
+        "Repulsion": 0,
+        "Spin": False,
+    },
+    "Train": {
+        "maxEpoch": 10000,
+        "maxStep": 1000000,
+        "allowMissing": False,
+        "huberDelta": -1.0,
+        "targetProp": ["energy", "forces"],
+        "weight": [0.1, 1.0],
+        "forceScale": 0.0,
+        "evalStepInterval": 50,
+        "evalEpochInterval": 1,
+        "logInterval": 50,
+        "saveStart": 1000,
+        "evalTest": True,
+        "gradClip": None,
+        "Optimizer": {
+            "type": "Adam",
+            "amsGrad": True,
+            "weightDecay": 0.0,
+            "learningRate": 0.01,
         },
-    }
+        "LrScheduler": {
+            "type": "constant",
+        },
+        "emaDecay": 0.0,
+    },
+}
+
 
 class SaveModelCheckpoint(ModelCheckpoint):
     """
     Saves model.pt for eval
     """
+
     def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
         super()._save_checkpoint(trainer, filepath)
         dirname = os.path.dirname(filepath)
         modelname = os.path.basename(filepath)[:-5]
         if trainer.is_global_zero:
-            torch.save(trainer.lightning_module.model, os.path.join(dirname, f"{modelname}.pt"))
-            shutil.copy(os.path.join(dirname, f"{modelname}.ckpt"), os.path.join(dirname, "best.ckpt"))
-            shutil.copy(os.path.join(dirname, f"{modelname}.pt"), os.path.join(dirname, "best.pt"))
+            torch.save(
+                trainer.lightning_module.model, os.path.join(dirname, f"{modelname}.pt")
+            )
+            shutil.copy(
+                os.path.join(dirname, f"{modelname}.ckpt"),
+                os.path.join(dirname, "best.ckpt"),
+            )
+            shutil.copy(
+                os.path.join(dirname, f"{modelname}.pt"),
+                os.path.join(dirname, "best.pt"),
+            )
 
     def _remove_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
         super()._remove_checkpoint(trainer, filepath)
@@ -129,9 +153,13 @@ class LogAllLoss(pl.Callback):
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if trainer.global_rank == 0:
             loss_metrics = trainer.callback_metrics
-            self.train_loss['total'].append(np.sqrt(loss_metrics['train_loss'].detach().cpu().numpy()))
+            self.train_loss['total'].append(
+                np.sqrt(loss_metrics['train_loss'].detach().cpu().numpy())
+            )
             for prop in self.properties:
-                self.train_loss[prop].append(np.sqrt(loss_metrics[f'train_{prop}'].detach().cpu().numpy()))
+                self.train_loss[prop].append(
+                    np.sqrt(loss_metrics[f'train_{prop}'].detach().cpu().numpy())
+                )
 
     def on_validation_epoch_end(self, trainer, pl_module):
         if trainer.global_rank == 0:
@@ -150,11 +178,14 @@ class LogAllLoss(pl.Callback):
             content = f"{epoch:^10}|{step:^10}|{lr:^10.2e}|{train_loss:^10.4f}/{val_loss:^10.4f}"
             for prop in self.properties:
                 train_prop_loss = np.mean(self.train_loss[prop])
-                val_prop_loss = np.sqrt(loss_metrics[f'val_{prop}'].detach().cpu().numpy())
+                val_prop_loss = np.sqrt(
+                    loss_metrics[f'val_{prop}'].detach().cpu().numpy()
+                )
                 content += f"|{train_prop_loss:^10.4f}/{val_prop_loss:^10.4f}"
             log.info(content)
             for prop in self.train_loss:
                 self.train_loss[prop] = []
+
 
 def update_dict(d1, d2):
     for key in d2:
@@ -166,38 +197,51 @@ def update_dict(d1, d2):
 
 
 def get_stats(data_dict, dataset):
-
-    if type(data_dict["nNeighbor"]) is float:
-        n_neighbor = data_dict["nNeighbor"]
+    if data_dict["meta"] is not None:
+        with open(data_dict["meta"]) as f:
+            stats = yaml.load(f, Loader=yaml.FullLoader)
+        n_neighbor = stats["nNeighbor"]
+        elements = stats["elements"]
+        ground_energy = stats["ground_energy"]
+        std = stats["std"]
+        mean = stats["mean"]
     else:
-        n_neighbor = float(dataset.n_neighbor_mean)
+        if type(data_dict["nNeighbor"]) is float:
+            n_neighbor = data_dict["nNeighbor"]
+        else:
+            n_neighbor = float(dataset.n_neighbor_mean)
 
-    if isinstance(data_dict["elements"], list):
-        elements = data_dict["elements"]
-    else:
-        elements = dataset.all_elements
+        if isinstance(data_dict["elements"], list):
+            elements = data_dict["elements"]
+        else:
+            elements = dataset.all_elements
 
-    if type(data_dict["mean"]) is float:
-        ground_energy = [data_dict["mean"]] * len(elements)
-    else:
-        try:
-            ground_energy = dataset.ground_energy
-        except:
-            ground_energy = [0.] * len(elements)
+        if type(data_dict["groundEnergy"]) is float:
+            ground_energy = [data_dict["groundEnergy"]] * len(elements)
+        else:
+            try:
+                ground_energy = dataset.ground_energy
+            except:
+                ground_energy = [0.0] * len(elements)
+        if type(data_dict["mean"]) is float:
+            mean = data_dict["mean"]
+        else:
+            mean = 0.0
+        if type(data_dict["std"]) is float:
+            std = data_dict["std"]
+        else:
+            try:
+                std = dataset.forces_std
+            except:
+                std = 1.0
 
-    if type(data_dict["std"]) is float: 
-        std = data_dict["std"]
-    else:
-        try:
-            std = dataset.forces_std
-        except:
-            std = 1.
-
+    EnvPara.ELEMENTS = elements
     log.info(f"n_neighbor   : {n_neighbor}")
     log.info(f"all_elements : {elements}")
     log.info(f"ground_energy  : {ground_energy}")
     log.info(f"std   : {std}")
-    return ground_energy, std, n_neighbor, elements
+    log.info(f"mean  : {mean}")
+    return ground_energy, mean, std, n_neighbor, elements
 
 
 def get_cutoff(p_dict):
@@ -210,22 +254,32 @@ def get_cutoff(p_dict):
     elif cut_dict['type'] == "poly":
         return PolynomialCutoff(cutoff=cutoff, p=cut_dict['p'])
     else:
-        raise Exception("Unsupported cutoff type: {}, please choose from cos, cos2, and poly!".format(cut_dict['type']))
-    
+        raise Exception(
+            "Unsupported cutoff type: {}, please choose from cos, cos2, and poly!".format(
+                cut_dict['type']
+            )
+        )
+
 
 def get_radial(p_dict, cutoff_fn):
     cutoff = p_dict['cutoff']
     radial_dict = p_dict['Model']['RadialLayer']
     if "bessel" in radial_dict['type']:
-        radial_fn = BesselPoly(r_max=cutoff, n_max=radial_dict['nBasis'], cutoff_fn=cutoff_fn)
+        radial_fn = BesselPoly(
+            r_max=cutoff, n_max=radial_dict['nBasis'], cutoff_fn=cutoff_fn
+        )
     elif "chebyshev" in radial_dict['type']:
         if "minDist" in radial_dict:
             r_min = radial_dict['minDist']
         else:
             r_min = 0.5
-            log.warning("You are using chebyshev poly as basis function, but does not given 'minDist', "
-                        "this may cause some problems!")
-        radial_fn = ChebyshevPoly(r_max=cutoff, r_min=r_min, n_max=radial_dict['nBasis'], cutoff_fn=cutoff_fn)
+            log.warning(
+                "You are using chebyshev poly as basis function, but does not given 'minDist', "
+                "this may cause some problems!"
+            )
+        radial_fn = ChebyshevPoly(
+            r_max=cutoff, r_min=r_min, n_max=radial_dict['nBasis'], cutoff_fn=cutoff_fn
+        )
     else:
         raise Exception("Unsupported radial type: {}!".format(radial_dict['type']))
     if "MLP" in radial_dict['type']:
@@ -234,8 +288,16 @@ def get_radial(p_dict, cutoff_fn):
         elif radial_dict["activateFn"] == "relu":
             activate_fn = nn.ReLU()
         else:
-            raise Exception("Unsupported activate function in radial type: {}!".format(radial_dict["activateFn"]))
-        return MLPPoly(n_hidden=radial_dict['nHidden'], radial_fn=radial_fn, activate_fn=activate_fn)
+            raise Exception(
+                "Unsupported activate function in radial type: {}!".format(
+                    radial_dict["activateFn"]
+                )
+            )
+        return MLPPoly(
+            n_hidden=radial_dict['nHidden'],
+            radial_fn=radial_fn,
+            activate_fn=activate_fn,
+        )
     else:
         return radial_fn
 
@@ -244,7 +306,12 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
     model_dict = p_dict['Model']
     target = p_dict['Train']['targetProp']
     target_way = {}
-    if ("energy" in target) or ("forces" in target) or ("virial" in target) or ("spin_torques" in target):
+    if (
+        ("energy" in target)
+        or ("forces" in target)
+        or ("virial" in target)
+        or ("spin_torques" in target)
+    ):
         target_way["site_energy"] = 0
     if "dipole" in target:
         target_way["dipole"] = 1
@@ -254,7 +321,9 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
     if "direct_forces" in target:
         target_way["direct_forces"] = 1
     cut_fn = get_cutoff(p_dict)
-    emb = AtomicEmbedding(elements, model_dict['nEmbedding'])  # only support atomic embedding now
+    emb = AtomicEmbedding(
+        elements, model_dict['nEmbedding']
+    )  # only support atomic embedding now
     radial_fn = get_radial(p_dict, cut_fn)
     max_r_way = expand_para(model_dict['maxRWay'], model_dict['nLayer'])
     max_out_way = expand_para(model_dict['maxOutWay'], model_dict['nLayer'])
@@ -263,42 +332,45 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
     max_n_body = expand_para(model_dict['maxNBody'], model_dict['nLayer'])
 
     if model_dict['net'] == 'miao':
-        model = MiaoNet(embedding_layer=emb,
-                        radial_fn=radial_fn,
-                        n_layers=model_dict['nLayer'],
-                        max_r_way=max_r_way,
-                        max_out_way=max_out_way,
-                        output_dim=output_dim,
-                        activate_fn=model_dict['activateFn'],
-                        target_way=target_way,
-                        mean=mean,
-                        std=std,
-                        norm_factor=n_neighbor,
-                        bilinear=model_dict['bilinear'],
-                        conv_mode=model_dict['convMode'],
-                        update_edge=model_dict['updateEdge'],
-                        ).to(p_dict['device'])
+        model = MiaoNet(
+            embedding_layer=emb,
+            radial_fn=radial_fn,
+            n_layers=model_dict['nLayer'],
+            max_r_way=max_r_way,
+            max_out_way=max_out_way,
+            output_dim=output_dim,
+            activate_fn=model_dict['activateFn'],
+            target_way=target_way,
+            mean=mean,
+            std=std,
+            norm_factor=n_neighbor,
+        ).to(p_dict['device'])
     elif model_dict['net'] == 'miaomiao':
-        model = MiaoMiaoNet(embedding_layer=emb,
-                        radial_fn=radial_fn,
-                        n_layers=model_dict['nLayer'],
-                        max_r_way=max_r_way,
-                        max_out_way=max_out_way,
-                        max_n_body=max_n_body,
-                        output_dim=output_dim,
-                        activate_fn=model_dict['activateFn'],
-                        target_way=target_way,
-                        mean=mean,
-                        std=std,
-                        norm_factor=n_neighbor,
-                        bilinear=model_dict['bilinear'],
-                        conv_mode=model_dict['convMode'],
-                        update_edge=model_dict['updateEdge'],
-                        ).to(p_dict['device'])
+        model = MiaoMiaoNet(
+            embedding_layer=emb,
+            radial_fn=radial_fn,
+            n_layers=model_dict['nLayer'],
+            max_r_way=max_r_way,
+            max_out_way=max_out_way,
+            max_n_body=max_n_body,
+            output_dim=output_dim,
+            activate_fn=model_dict['activateFn'],
+            target_way=target_way,
+            mean=mean,
+            std=std,
+            norm_factor=n_neighbor,
+            update_edge=model_dict['updateEdge'],
+        ).to(p_dict['device'])
     elif model_dict['net'] == 'spinmiao':
-        max_r_way = expand_para(model_dict['maxRWay'], model_dict['nLayer'] + model_dict['nSpinLayer'])
-        max_out_way = expand_para(model_dict['maxOutWay'], model_dict['nLayer'] + model_dict['nSpinLayer'])
-        output_dim = expand_para(model_dict['nHidden'], model_dict['nLayer'] + model_dict['nSpinLayer'])
+        max_r_way = expand_para(
+            model_dict['maxRWay'], model_dict['nLayer'] + model_dict['nSpinLayer']
+        )
+        max_out_way = expand_para(
+            model_dict['maxOutWay'], model_dict['nLayer'] + model_dict['nSpinLayer']
+        )
+        output_dim = expand_para(
+            model_dict['nHidden'], model_dict['nLayer'] + model_dict['nSpinLayer']
+        )
         max_m_way = expand_para(model_dict['maxMWay'], model_dict['nSpinLayer'])
         spin_radial_fn = SpinChebyshevPoly(spin_max=p_dict['maxSpin'], n_max=12)
         model = SpinMiaoNet(
@@ -317,22 +389,28 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
             mean=mean,
             std=std,
             norm_factor=n_neighbor,
-            ).to(p_dict['device'])
+        ).to(p_dict['device'])
 
     assert isinstance(model_dict['Repulsion'], int), "Repulsion should be int!"
     module_dict = {'main': model}
     if "site_energy" in target_way:
-        module_dict['ground_energy'] = GroundEnergy(atomic_number=elements, ground_energy=ground_energy)
+        module_dict['ground_energy'] = GroundEnergy(
+            atomic_number=elements, ground_energy=ground_energy
+        )
     if model_dict['Repulsion'] > 0:
-        assert "site_energy" in target_way, "Only support 'repulsion' when learning energy"
-        module_dict['repulsion'] = TwoBody(embedding_layer=emb,
-                                           cutoff_fn=cut_fn,
-                                           k_max=model_dict['Repulsion'])
+        assert (
+            "site_energy" in target_way
+        ), "Only support 'repulsion' when learning energy"
+        module_dict['repulsion'] = TwoBody(
+            embedding_layer=emb, cutoff_fn=cut_fn, k_max=model_dict['Repulsion']
+        )
 
     return MultiAtomicModule(module_dict)
 
 
-def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, **kwargs):
+def main(
+    *args, input_file='input.yaml', load_model=None, load_checkpoint=None, **kwargs
+):
     # Default values
     p_dict = DefaultPara
     with open(input_file) as f:
@@ -352,10 +430,30 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
     setup_seed(p_dict["seed"])
     log.info("Using seed {}".format(p_dict["seed"]))
 
+    EnvPara.ELEMENT_MODE = p_dict["Model"]["eleMode"]
+    EnvPara.CONV_MODE = p_dict["Model"]["convMode"]
+    EnvPara.EDGE_UPDATE_MODE = p_dict["Model"]["updateEdge"]
+    if p_dict["precision"] == "double":
+        EnvPara.FLOAT_PRECISION = torch.float64
+
     log.info(f"Preparing data...")
     dataset = LitAtomsDataset(p_dict)
     dataset.setup()
-    ground_energy, std, n_neighbor, elements = get_stats(p_dict["Data"], dataset)
+    ground_energy, mean, std, n_neighbor, elements = get_stats(p_dict["Data"], dataset)
+    stats = {
+        "cutoff": float(p_dict["cutoff"]),
+        "nNeighbor": float(n_neighbor),
+        "elements": elements,
+        "ground_energy": (
+            ground_energy.tolist()
+            if isinstance(ground_energy, np.ndarray)
+            else ground_energy
+        ),
+        "std": float(std),
+        "mean": float(mean),
+    }
+    with open("metadata.yaml", "w") as f:
+        yaml.dump(stats, f)
 
     if load_model is not None and 'ckpt' not in load_model:
         log.info(f"Load model from {load_model}")
@@ -363,13 +461,16 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
     else:
         ## TODO
         # mean and ground energy?
-        mean = 0.
         model = get_model(p_dict, elements, mean, ground_energy, std, n_neighbor)
         model.register_buffer('all_elements', torch.tensor(elements, dtype=torch.long))
-        model.register_buffer('cutoff', torch.tensor(p_dict["cutoff"], dtype=torch.float64))
+        model.register_buffer(
+            'cutoff', torch.tensor(p_dict["cutoff"], dtype=torch.float64)
+        )
 
     if load_model is not None and 'ckpt' in load_model:
-        lit_model = LitAtomicModule.load_from_checkpoint(load_model, model=model, p_dict=p_dict)
+        lit_model = LitAtomicModule.load_from_checkpoint(
+            load_model, model=model, p_dict=p_dict
+        )
     else:
         lit_model = LitAtomicModule(model=model, p_dict=p_dict)
 
@@ -384,7 +485,7 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
             dirpath=p_dict["outputDir"],
             filename='{epoch}-{step}-{val_loss:.4f}',
             save_top_k=5,
-            monitor="val_loss"
+            monitor="val_loss",
         ),
         LearningRateMonitor(),
         LogAllLoss(p_dict["Train"]['targetProp']),
@@ -401,13 +502,14 @@ def main(*args, input_file='input.yaml', load_model=None, load_checkpoint=None, 
         val_check_interval=p_dict["Train"]["evalStepInterval"],
         check_val_every_n_epoch=p_dict["Train"]["evalEpochInterval"],
         gradient_clip_val=p_dict["Train"]["gradClip"],
-        )
-    
+    )
+
     if load_checkpoint is not None:
         log.info(f"Load checkpoints from {load_checkpoint}")
         trainer.fit(lit_model, datamodule=dataset, ckpt_path=load_checkpoint)
     else:
         trainer.fit(lit_model, datamodule=dataset)
+
 
 if __name__ == "__main__":
     main()
