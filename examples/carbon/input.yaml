@@ -24,14 +24,14 @@ Model:
   RadialLayer:
     type: besselMLP
     nBasis: 8
-    nHidden: [64, 64, 64]
+    nHidden: [64, 64]
     activateFn: silu
 Train:
   warmupSteps: 500
   allowMissing: True
   targetProp: ["energy", "forces", "virial"] 
   weight: [0.5, 1.0, 0.2]
-  maxEpoch: 10
+  maxEpoch: 1000
   maxStep: 10000000
   logInterval: 1
   evalEpochInterval: 1

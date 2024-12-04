@@ -30,12 +30,10 @@ def read_dpdata(path: str,
             real_type_list = None
         box = np.load(os.path.join(dataset, "box.npy"))
         coord = np.load(os.path.join(dataset, "coord.npy"))
-        if 'energy' in properties:
-            energy = np.load(os.path.join(dataset, "energy.npy"))
-        if 'forces' in properties:
-            forces = np.load(os.path.join(dataset, "force.npy"))
-        if 'virial' in properties:
-            virial = np.load(os.path.join(dataset, "virial.npy"))
+        atoms_info = {}
+        for prop in properties:
+            atoms_info[prop] = np.load(os.path.join(dataset, f"{prop}.npy"))
+
         for i in range(len(box)):
             if real_type_list is not None:
                 real_symbols = [type_map_list[t] for t in real_type_list[i]]
@@ -47,12 +45,14 @@ def read_dpdata(path: str,
                 positions=coord[i].reshape(-1, 3),
                 cell=box[i].reshape(3, 3))
             info = {}
-            if 'energy' in properties:
-                info["energy"] = energy[i]
-            if 'forces' in properties:
-                info["forces"] = forces[i].reshape(-1, 3)
-            if 'virial' in properties:
-                info["virial"] = virial[i].reshape(3, 3)
+            if "energy" in properties:
+                info["energy"] = atoms_info["energy"][i]
+            if "forces" in properties:
+                info["forces"] = atoms_info["forces"][i].reshape(-1, 3)
+            if "virial" in properties:
+                info["virial"] = atoms_info["virial"][i].reshape(3, 3)
+            if "polarizability" in properties:
+                info["polarizability"] = atoms_info["polarizability"][i].reshape(3, 3)
             atoms.info = info
             frames.append(atoms)
     return frames

@@ -32,63 +32,97 @@ class LitAtomsDataset(pl.LightningDataModule):
     def get_dataset(self):
         data_dict = self.p_dict['Data']
         if data_dict['type'] == 'rmd17':
-            dataset = RevisedMD17(data_dict['path'], 
-                                  data_dict['name'], 
-                                  cutoff=self.p_dict['cutoff'])
+            dataset = RevisedMD17(
+                data_dict['path'], data_dict['name'], cutoff=self.p_dict['cutoff']
+            )
         elif data_dict['type'] == 'ase':
             if 'name' in data_dict:
-                frames = read(os.path.join(data_dict['path'], data_dict['name']), index=':')
+                frames = read(
+                    os.path.join(data_dict['path'], data_dict['name']), index=':'
+                )
             else:
                 frames = []
-            dataset = ASEData(frames=frames,
-                              properties=self.p_dict['Train']['targetProp'],
-                              cutoff=self.p_dict['cutoff'],
-                              spin=self.p_dict['Model']['Spin'])
+            dataset = ASEData(
+                frames=frames,
+                properties=self.p_dict['Train']['targetProp'],
+                cutoff=self.p_dict['cutoff'],
+                spin=self.p_dict['Model']['Spin'],
+            )
         elif data_dict['type'] == 'ase-db':
-            dataset = ASEDBData(datapath=os.path.join(data_dict['path'], data_dict['name']),
-                                properties=self.p_dict['Train']['targetProp'],
-                                cutoff=self.p_dict['cutoff'],
-                                spin=self.p_dict['Model']['Spin'])
+            dataset = ASEDBData(
+                datapath=os.path.join(data_dict['path'], data_dict['name']),
+                properties=self.p_dict['Train']['targetProp'],
+                cutoff=self.p_dict['cutoff'],
+                spin=self.p_dict['Model']['Spin'],
+            )
         elif data_dict['type'] == 'dpmd':
             if 'name' in data_dict:
-                path_list = [os.path.join(data_dict['path'], name) for name in data_dict['name']]
+                path_list = [
+                    os.path.join(data_dict['path'], name) for name in data_dict['name']
+                ]
             else:
                 path_list = []
-            dataset = DeePMDData(path_list=path_list,
-                                 properties=self.p_dict['Train']['targetProp'],
-                                 cutoff=self.p_dict['cutoff'],
-                                 spin=self.p_dict['Model']['Spin'])
+            dataset = DeePMDData(
+                path_list=path_list,
+                properties=self.p_dict['Train']['targetProp'],
+                cutoff=self.p_dict['cutoff'],
+                spin=self.p_dict['Model']['Spin'],
+            )
         return dataset
 
     def split_dataset(self):
         data_dict = self.p_dict['Data']
         if ("trainSplit" in data_dict) and ("testSplit" in data_dict):
-            log.info("Load split from {} and {}".format(data_dict["trainSplit"], data_dict["testSplit"]))
+            log.info(
+                "Load split from {} and {}".format(
+                    data_dict["trainSplit"], data_dict["testSplit"]
+                )
+            )
             train_idx = np.loadtxt(data_dict["trainSplit"], dtype=int)
-            test_idx  = np.loadtxt(data_dict["testSplit"], dtype=int)
+            test_idx = np.loadtxt(data_dict["testSplit"], dtype=int)
             return self.dataset.subset(train_idx), self.dataset.subset(test_idx)
 
         if ("trainNum" in data_dict) and (("testNum" in data_dict)):
-            log.info("Random split, train num: {}, test num: {}".format(data_dict["trainNum"], data_dict["testNum"]))
+            log.info(
+                "Random split, train num: {}, test num: {}".format(
+                    data_dict["trainNum"], data_dict["testNum"]
+                )
+            )
             assert data_dict['trainNum'] + data_dict['testNum'] <= len(self.dataset)
-            idx = np.random.choice(len(self.dataset), data_dict['trainNum'] + data_dict['testNum'], replace=False)
-            train_idx = idx[:data_dict['trainNum']]
-            test_idx  = idx[data_dict['trainNum']:]
+            idx = np.random.choice(
+                len(self.dataset),
+                data_dict['trainNum'] + data_dict['testNum'],
+                replace=False,
+            )
+            train_idx = idx[: data_dict['trainNum']]
+            test_idx = idx[data_dict['trainNum'] :]
             return self.dataset.subset(train_idx), self.dataset.subset(test_idx)
 
         if ("trainSet" in data_dict) and ("testSet" in data_dict):
             if data_dict['type'] == 'ase':
-                trainset = read(os.path.join(data_dict['path'], data_dict['trainSet']), index=':')
+                trainset = read(
+                    os.path.join(data_dict['path'], data_dict['trainSet']), index=':'
+                )
                 self.dataset.extend(trainset)
-                testset = read(os.path.join(data_dict['path'], data_dict['testSet']), index=':')
+                testset = read(
+                    os.path.join(data_dict['path'], data_dict['testSet']), index=':'
+                )
                 self.dataset.extend(testset)
                 train_idx = [i for i in range(len(trainset))]
-                test_idx = [i for i in range(len(trainset), len(trainset) + len(testset))]
+                test_idx = [
+                    i for i in range(len(trainset), len(trainset) + len(testset))
+                ]
             elif data_dict['type'] == 'dpmd':
-                train_list = [os.path.join(data_dict['path'], name) for name in data_dict['trainSet']]
+                train_list = [
+                    os.path.join(data_dict['path'], name)
+                    for name in data_dict['trainSet']
+                ]
                 self.dataset.extend(path_list=train_list)
                 train_idx = [i for i in range(len(self.dataset))]
-                test_list = [os.path.join(data_dict['path'], name) for name in data_dict['testSet']]
+                test_list = [
+                    os.path.join(data_dict['path'], name)
+                    for name in data_dict['testSet']
+                ]
                 self.dataset.extend(path_list=test_list)
                 test_idx = [i for i in range(len(train_idx), len(self.dataset))]
             else:
@@ -101,18 +135,26 @@ class LitAtomsDataset(pl.LightningDataModule):
         if self._train_dataloader is None:
             sampler = RandomSampler(self.trainset)
             if self.p_dict["Data"]["batchType"] == "structure":
-                batch_sampler = BatchSampler(sampler, batch_size=self.p_dict["Data"]["trainBatch"], drop_last=False)
+                batch_sampler = BatchSampler(
+                    sampler,
+                    batch_size=self.p_dict["Data"]["trainBatch"],
+                    drop_last=False,
+                )
             elif self.p_dict["Data"]["batchType"] == "edge":
-                batch_sampler = MaxEdgeSampler(sampler, batch_size=self.p_dict["Data"]["trainBatch"])
+                batch_sampler = MaxEdgeSampler(
+                    sampler, batch_size=self.p_dict["Data"]["trainBatch"]
+                )
             elif self.p_dict["Data"]["batchType"] == "node":
-                batch_sampler = MaxNodeSampler(sampler, batch_size=self.p_dict["Data"]["trainBatch"])
+                batch_sampler = MaxNodeSampler(
+                    sampler, batch_size=self.p_dict["Data"]["trainBatch"]
+                )
             self._train_dataloader = DataLoader(
                 self.trainset,
                 batch_sampler=batch_sampler,
                 collate_fn=atoms_collate_fn,
                 num_workers=self.p_dict["Data"]["numWorkers"],
-                pin_memory=self.p_dict["Data"]["pinMemory"]
-                )
+                pin_memory=self.p_dict["Data"]["pinMemory"],
+            )
             log.debug(f'numWorkers: {self.p_dict["Data"]["numWorkers"]}')
         return self._train_dataloader
 
@@ -123,22 +165,30 @@ class LitAtomsDataset(pl.LightningDataModule):
         if self._test_dataloader is None:
             sampler = SequentialSampler(self.testset)
             if self.p_dict["Data"]["batchType"] == "structure":
-                batch_sampler = BatchSampler(sampler, batch_size=self.p_dict["Data"]["testBatch"], drop_last=False)
+                batch_sampler = BatchSampler(
+                    sampler,
+                    batch_size=self.p_dict["Data"]["testBatch"],
+                    drop_last=False,
+                )
             elif self.p_dict["Data"]["batchType"] == "edge":
-                batch_sampler = MaxEdgeSampler(sampler, batch_size=self.p_dict["Data"]["testBatch"])
+                batch_sampler = MaxEdgeSampler(
+                    sampler, batch_size=self.p_dict["Data"]["testBatch"]
+                )
             elif self.p_dict["Data"]["batchType"] == "node":
-                batch_sampler = MaxNodeSampler(sampler, batch_size=self.p_dict["Data"]["testBatch"])
+                batch_sampler = MaxNodeSampler(
+                    sampler, batch_size=self.p_dict["Data"]["testBatch"]
+                )
             self._test_dataloader = DataLoader(
                 self.testset,
                 batch_sampler=batch_sampler,
                 collate_fn=atoms_collate_fn,
                 num_workers=self.p_dict["Data"]["numWorkers"],
-                pin_memory=self.p_dict["Data"]["pinMemory"]
-                )
+                pin_memory=self.p_dict["Data"]["pinMemory"],
+            )
         return self._test_dataloader
 
     # def calculate_stats(self):
-    #     # To be noticed, we assume that the average force is always 0, 
+    #     # To be noticed, we assume that the average force is always 0,
     #     # so the final result may differ from the actual variance
 
     #     N_batch = 0
@@ -195,26 +245,45 @@ class LitAtomsDataset(pl.LightningDataModule):
             if i_batch % 1000 == 0:
                 log.debug(f"Now {i_batch}")
             # all elemetns
-            atomic_numbers = np.split(batch_data['atomic_number'].detach().cpu().numpy(),
-                                      np.cumsum(batch_data['n_atoms'].detach().cpu().numpy()))
-            #print("!!!!!!", len(atomic_numbers), batch_data["energy_t"].detach().cpu().numpy().shape)
+            atomic_numbers = np.split(
+                batch_data['atomic_number'].detach().cpu().numpy(),
+                np.cumsum(batch_data['n_atoms'].detach().cpu().numpy()),
+            )
+            # print("!!!!!!", len(atomic_numbers), batch_data["energy_t"].detach().cpu().numpy().shape)
             for atomic_number in atomic_numbers[:-1]:
-                for i, n in enumerate(np.bincount(atomic_number, minlength=max(element_count.keys()) + 1)):
+                for i, n in enumerate(
+                    np.bincount(atomic_number, minlength=max(element_count.keys()) + 1)
+                ):
                     if i in element_count:
                         element_count[i].append(n)
                     else:
                         element_count[i] = [0] * (len(element_count[0]) - 1) + [n]
-            energy = np.concatenate((energy, batch_data["energy_t"].detach().cpu().numpy()))
-            n_neighbor = np.concatenate((n_neighbor, np.bincount(batch_data["idx_i"].detach().cpu().numpy())))
-            forces = np.concatenate((forces, batch_data["forces_t"].detach().cpu().numpy()))
+            if "energy_t" in batch_data:
+                energy = np.concatenate(
+                        (energy, batch_data["energy_t"].detach().cpu().numpy())
+                        )
+            n_neighbor = np.concatenate(
+                (n_neighbor, np.bincount(batch_data["idx_i"].detach().cpu().numpy()))
+            )
+            if "forces_t" in batch_data:
+                forces = np.concatenate(
+                        (forces, batch_data["forces_t"].detach().cpu().numpy())
+                        )
 
-        self.stats["n_neighbor_mean"] = np.mean(n_neighbor)
-        self.stats["forces_std"] = np.std(forces)
-        self.stats["all_elements"] = [e for e, n in element_count.items() if np.sum(n) > 0]
+        self.stats["n_neighbor_mean"] = float(np.mean(n_neighbor))
+        if len(forces) > 0:
+            self.stats["forces_std"] = float(np.std(forces))
+        else:
+            self.stats["forces_std"] = 1.
+        self.stats["all_elements"] = [
+            int(e) for e, n in element_count.items() if np.sum(n) > 0
+        ]
         log.debug("Calculating ground energy...")
-        A = np.array([element_count[k] for k in self.stats["all_elements"]]).T
-        #print(A.shape, energy.shape)
-        self.stats["ground_energy"] = list(np.linalg.lstsq(A, energy, rcond=None)[0])
+        if len(energy) > 0:
+            A = np.array([element_count[k] for k in self.stats["all_elements"]]).T
+            self.stats["ground_energy"] = list(np.linalg.lstsq(A, energy, rcond=None)[0])
+        else:
+            self.stats["ground_energy"] = [0.]
 
     @property
     def forces_std(self):

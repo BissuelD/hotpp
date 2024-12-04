@@ -50,6 +50,13 @@ class AtomsDataset(Dataset, abc.ABC):
                 except:
                     pass
 
+        if 'dipole' in properties:
+            if 'dipole' not in atoms.info:
+                try:
+                    atoms.info['dipole'] = atoms.get_dipole_moment()
+                except:
+                    pass
+
         if 'virial' in properties:
             data["scaling"] = torch.eye(dim, dtype=EnvPara.FLOAT_PRECISION).view(1, dim, dim)
             if 'virial' not in atoms.info:
@@ -177,6 +184,7 @@ class MaxEdgeSampler(Sampler):
         for idx in self.sampler:
             self.edge_num[idx] = self.sampler.data_source[idx]["n_edges"]
         if max(self.edge_num) > self.batch_size:
+            print("!!!!!!!", self.sampler.data_source[idx])
             raise Exception(f"Max edge in one structure {max(self.edge_num)} > batch_size {self.batch_size}")
 
     def __iter__(self) -> Iterator[List[int]]:
