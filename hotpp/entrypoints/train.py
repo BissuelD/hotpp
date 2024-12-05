@@ -40,7 +40,6 @@ DefaultPara = {
     "workDir": os.getcwd(),
     "seed": np.random.randint(0, 100000000),
     "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "outputDir": os.path.join(os.getcwd(), "outDir"),
     "precision": "float",
     "Data": {
         "path": os.getcwd(),
@@ -409,13 +408,13 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
 
 
 def main(
-    *args, input_file='input.yaml', load_model=None, load_checkpoint=None, **kwargs
+    *args, input_file='input.yaml', output_folder='outDir', load_model=None, load_checkpoint=None, **kwargs
 ):
     # Default values
     p_dict = DefaultPara
     with open(input_file) as f:
         update_dict(p_dict, yaml.load(f, Loader=yaml.FullLoader))
-
+    p_dict["outputDir"] = os.path.join(p_dict["workDir"], output_folder)
     if os.path.exists(p_dict["outputDir"]):
         i = 1
         while os.path.exists(f"{p_dict['outputDir']}{i}"):

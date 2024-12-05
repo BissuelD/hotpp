@@ -21,8 +21,9 @@ def parse_args():
     parser_log.add_argument(
         "-ll",
         "--log-level",
+        nargs=2,
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
+        default=["DEBUG", "INFO"],
         help="set verbosity level by strings: ERROR, WARNING, INFO and DEBUG",
     )
     parser_log.add_argument(
@@ -42,10 +43,17 @@ def parse_args():
     )
     parser_train.add_argument(
         "-i",
-        "--input-file",
+        "--input_file",
         type=str,
         default="input.yaml",
         help="the input parameter file in yaml format"
+    )
+    parser_train.add_argument(
+        "-o",
+        "--output_folder",
+        type=str,
+        default="outDir",
+        help="the output folder"
     )
     parser_train.add_argument(
         "--load_model",

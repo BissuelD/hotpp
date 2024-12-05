@@ -163,9 +163,8 @@ class TensorProductLayer(nn.Module):
                     abs(y_way - x_way), min(max_z_way, x_way + y_way) + 1, 2
                 ):
                     self.combinations.append((x_way, y_way, z_way))
-                    self.linear_list.append(
-                        TensorLinear(input_dim, output_dim, bias=False)
-                    )
+                    self.linear_list.append(TensorLinear(input_dim, output_dim, bias=False))
+
 
     def forward(
         self,
@@ -173,16 +172,16 @@ class TensorProductLayer(nn.Module):
         y: Dict[int, torch.Tensor],
     ) -> Dict[int, torch.Tensor]:
         output_tensors = torch.jit.annotate(Dict[int, torch.Tensor], {})
-        for (x_way, y_way, z_way), linear in zip(self.combinations, self.linear_list):
-            if x_way not in x or y_way not in y:
-                continue
-            output_tensor = linear(
-                _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
-            )
-            if z_way not in output_tensors:
-                output_tensors[z_way] = output_tensor
-            else:
-                output_tensors[z_way] += output_tensor
+        for i, linear in enumerate(self.linear_list):
+            (x_way, y_way, z_way) = self.combinations[i]
+            if x_way in x and y_way in y:
+                output_tensor = linear(
+                    _aggregate_new(x[x_way], y[y_way], x_way, y_way, z_way)
+                )
+                if z_way not in output_tensors:
+                    output_tensors[z_way] = output_tensor
+                else:
+                    output_tensors[z_way] += output_tensor
         return output_tensors
 
 

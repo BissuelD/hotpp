@@ -16,7 +16,7 @@ class GroundEnergy(AtomicModule):
         super().__init__()
         self.n_channel = 1
         self.target_way = {"site_energy": 0}
-        self.one_hot = AtomicOneHot(atomic_number, trainable=False)
+        self.embedding_layer = AtomicOneHot(atomic_number, trainable=False)
         self.register_buffer(
             "ground_energy", torch.tensor(ground_energy, dtype=EnvPara.FLOAT_PRECISION)
         )
@@ -25,5 +25,5 @@ class GroundEnergy(AtomicModule):
         self,
         batch_data: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
-        batch_data['site_energy'] = self.one_hot(batch_data) @ self.ground_energy
+        batch_data['site_energy'] = self.embedding_layer(batch_data) @ self.ground_energy
         return batch_data

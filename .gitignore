@@ -15,13 +15,14 @@ __pycache__/
 
 # Examples
 examples/*/*
-#examples/*/outDir*
-#examples/*/eval
-#examples/*/*.yaml
 !examples/*/data
 !examples/*/input.yaml
 !examples/*/*.ipynb
 !examples/*/*.ckpt
+# carbon
+!examples/carbon/force_constant_dft.npy
+# water
+!examples/water/lammps-infer.pt
 # C extensions
 *.so
 
