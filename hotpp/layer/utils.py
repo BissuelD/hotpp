@@ -1,3 +1,5 @@
+# TODO
+# 我看以后atomic number改type得了，呵呵
 import torch
 from typing import List, Dict
 from torch import nn

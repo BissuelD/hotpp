@@ -22,6 +22,9 @@ def main(*args, model="model.pt", device="cpu", output="infer.pt", symbols=None,
             for i, n in enumerate(all_elements):
                 new_weight[i] = value[n].data
             value.data = new_weight
+    for name, value in model.named_buffers():
+        if "atomic_number_to_type" in name:
+            value.data = torch.arange(0, len(all_elements), 1, dtype=torch.long)
     lammps_infer = torch.jit.script(model)
     lammps_infer.save(f'lammps-{output}')
 

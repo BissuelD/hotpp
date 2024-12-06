@@ -11,7 +11,6 @@ Data:
   numWorkers: 8
   pinMemory: True
 Model:
-  mode: simple
   nLayer: 5
   activateFn: silu
   nEmbedding: 64
@@ -31,7 +30,7 @@ Train:
   allowMissing: True
   targetProp: ["energy", "forces", "virial"] 
   weight: [0.5, 1.0, 0.2]
-  maxEpoch: 1000
+  maxEpoch: 10
   maxStep: 10000000
   logInterval: 1
   evalEpochInterval: 1

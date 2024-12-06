@@ -3,14 +3,13 @@ seed: 0
 device: 'cuda'
 Data:
   type: ase
-  path: . 
+  path: data 
   trainBatch: 16
   testBatch: 16
   trainSet: train.xyz
   testSet: test.xyz
 Model:
   nLayer: 4
-  mode: simple
   activateFn: silu
   nEmbedding: 64
   nHidden: 64
@@ -23,20 +22,22 @@ Model:
     #type: bessel
     type: besselMLP
     nBasis: 8
-    nHidden: [64, 64, 64]
+    nHidden: [64, 64]
     activateFn: silu
 Train:
+  warmupSteps: 20
   allowMissing: False
   targetProp: ["dipole"] 
   weight: [1.0]
   amsGrad: True                          # use amsGrad  
-  epoch: 50000
-  logInterval: 100
+  maxEpoch: 10
+  evalStepInterval: 1.0
+  evalEpochInterval: 1
   emaDecay: 0.0                          # use ema
   Optimizer: 
     type: AdamW
     amsGrad: True
-    weightDecay: !!float 1e-6
+    weightDecay: !!float 0.
     learningRate: !!float 1e-3
   LrScheduler:
     type: reduceOnPlateau
