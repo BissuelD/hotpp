@@ -319,6 +319,12 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
         target_way["polar_off_diagonal"] = 2
     if "direct_forces" in target:
         target_way["direct_forces"] = 1
+    if "peratom_tensor" in target:
+        target_way["peratom_tensor_diag"] = 0
+        target_way["peratom_tensor_offdiag"] = 2
+    if "l3_tensor" in target:
+        target_way["l3_tensor_diag"] = 1
+        target_way["l3_tensor_offdiag"] = 3
     cut_fn = get_cutoff(p_dict)
     emb = AtomicEmbedding(
         elements, model_dict['nEmbedding']

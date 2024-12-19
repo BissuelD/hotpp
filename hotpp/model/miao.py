@@ -239,6 +239,9 @@ class MiaoNet(AtomicModule):
         if 'polar_diag' in output_tensors:
             output_tensors['polar_diag'] = output_tensors['polar_diag'] * self.std + self.mean
             output_tensors['polar_off_diagonal'] = output_tensors['polar_off_diagonal'] * self.std
+        if 'peratom_tensor_diag' in output_tensors:
+            output_tensors['peratom_tensor_diag'] = output_tensors['peratom_tensor_diag'] * self.std + self.mean
+            output_tensors['peratom_tensor_offdiag'] = output_tensors['peratom_tensor_offdiag'] * self.std
         return output_tensors
 
     def get_init_info(
