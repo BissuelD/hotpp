@@ -83,7 +83,8 @@ class AtomsDataset(Dataset, abc.ABC):
             'spin_torques': (len(atoms), dim),
             'direct_forces': (len(atoms), dim),
             'peratom_tensor': (len(atoms), dim, dim),
-            'l3_tensor': (1, dim, dim, dim)
+            'l3_tensor': (1, dim, dim, dim),
+            'peratom_l3_tensor': (len(atoms), dim, dim, dim),
         }
         for key in properties:
             if key in atoms.info:
