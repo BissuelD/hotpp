@@ -205,9 +205,11 @@ class ElementMLP(nn.Module):
         batch_data: Dict[str, torch.Tensor],
     ) -> torch.Tensor:
         output_features = input_features
-        for layer in self.mlp[:-1]:
-            output_features = self.activate_fn(layer(output_features, batch_data))
-        return self.mlp[-1](output_features, batch_data)
+        for i, layer in enumerate(self.mlp):
+            output_features = layer(output_features, batch_data)
+            if i < len(self.mlp):
+                output_features = self.activate_fn(output_features)
+        return output_features
 
     def __repr__(self):
         return f"{self.__class__.__name__}{self.n_hidden}"
