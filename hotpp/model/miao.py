@@ -36,6 +36,7 @@ class UpdateNodeBlock(nn.Module):
         super().__init__()
         self.graph_conv = GraphConvLayer(
             radial_fn=radial_fn,
+            cutoff_fn=radial_fn.cutoff_fn,
             input_dim=input_dim,
             output_dim=output_dim,
             max_in_way=max_in_way,
@@ -85,6 +86,7 @@ class UpdateEdgeBlock(nn.Module):
         if EnvPara.EDGE_UPDATE_MODE == 'distance':
             self.graph_conv = GraphConvLayer(
                 radial_fn=radial_fn,
+                cutoff_fn=radial_fn.cutoff_fn,
                 input_dim=input_dim,
                 output_dim=output_dim,
                 max_in_way=max_in_way,
@@ -93,6 +95,7 @@ class UpdateEdgeBlock(nn.Module):
             )
         elif EnvPara.EDGE_UPDATE_MODE == 'Allegro':
             self.graph_conv = AllegroGraphConvLayer(
+                cutoff_fn=radial_fn.cutoff_fn,
                 input_dim=input_dim,
                 output_dim=output_dim,
                 max_in_way=max_in_way,

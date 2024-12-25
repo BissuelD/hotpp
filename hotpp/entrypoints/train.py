@@ -282,6 +282,7 @@ def get_radial(p_dict, cutoff_fn):
     else:
         raise Exception("Unsupported radial type: {}!".format(radial_dict['type']))
     if "MLP" in radial_dict['type']:
+        radial_fn.cutoff_fn = None
         if radial_dict["activateFn"] == "silu":
             activate_fn = nn.SiLU()
         elif radial_dict["activateFn"] == "relu":
@@ -296,6 +297,7 @@ def get_radial(p_dict, cutoff_fn):
             n_hidden=radial_dict['nHidden'],
             radial_fn=radial_fn,
             activate_fn=activate_fn,
+            cutoff_fn=cutoff_fn,
         )
     else:
         return radial_fn
@@ -457,8 +459,6 @@ def main(
     }
     with open("metadata.yaml", "w") as f:
         yaml.dump(stats, f)
-    with open("wocao.yaml", "w") as f:
-        yaml.dump(float(stats['ground_energy'][0]), f)
     if load_model is not None and 'ckpt' not in load_model:
         log.info(f"Load model from {load_model}")
         model = torch.load(load_model)
