@@ -285,7 +285,7 @@ class GraphConvLayer(nn.Module):
         for r_way in range(max_r_way + 1):
             rbf_mixing_list.append(
                 ElementLinear(
-                    EnvPara.ELEMENTS, radial_fn.n_channel, output_dim, bias=True
+                    EnvPara.ELEMENTS, radial_fn.n_channel, output_dim, bias=False
                 )
             )
 

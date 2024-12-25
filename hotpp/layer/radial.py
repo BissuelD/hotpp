@@ -79,7 +79,7 @@ class MLPPoly(RadialLayer):
         self.n_hidden = n_hidden
         self.radial_fn = radial_fn
         self.activate_fn = activate_fn
-        x = [nn.Linear(radial_fn.n_channel, n_hidden[0])]
+        x = [nn.Linear(radial_fn.n_channel, n_hidden[0], bias=False)]
         for n_in, n_out in zip(n_hidden[:-1], n_hidden[1:]):
             x.extend([activate_fn, nn.Linear(n_in, n_out)])
         self.mlp = nn.Sequential(*x)

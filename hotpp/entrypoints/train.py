@@ -364,7 +364,6 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
             mean=mean,
             std=std,
             norm_factor=n_neighbor,
-            update_edge=model_dict['updateEdge'],
         ).to(p_dict['device'])
     elif model_dict['net'] == 'spinmiao':
         max_r_way = expand_para(
@@ -449,17 +448,14 @@ def main(
         "cutoff": float(p_dict["cutoff"]),
         "nNeighbor": float(n_neighbor),
         "elements": elements,
-        "ground_energy": (
-            ground_energy.tolist()
-            if isinstance(ground_energy, np.ndarray)
-            else ground_energy
-        ),
+        "ground_energy": [float(e) for e in ground_energy],
         "std": float(std),
         "mean": float(mean),
     }
     with open("metadata.yaml", "w") as f:
         yaml.dump(stats, f)
-
+    with open("wocao.yaml", "w") as f:
+        yaml.dump(float(stats['ground_energy'][0]), f)
     if load_model is not None and 'ckpt' not in load_model:
         log.info(f"Load model from {load_model}")
         model = torch.load(load_model)

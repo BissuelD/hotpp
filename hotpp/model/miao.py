@@ -43,7 +43,7 @@ class UpdateNodeBlock(nn.Module):
             max_r_way=max_r_way,
         )
         self.self_interact = SelfInteractionLayer(
-            input_dim=input_dim, max_way=max_out_way, output_dim=output_dim
+            input_dim=output_dim, max_way=max_out_way, output_dim=output_dim
         )
         self.non_linear = NonLinearLayer(
             activate_fn=activate_fn, max_way=max_out_way, input_dim=output_dim
@@ -100,7 +100,7 @@ class UpdateEdgeBlock(nn.Module):
                 max_r_way=max_r_way,
             )
         self.self_interact = SelfInteractionLayer(
-            input_dim=input_dim, max_way=max_out_way, output_dim=output_dim
+            input_dim=output_dim, max_way=max_out_way, output_dim=output_dim
         )
         self.non_linear = NonLinearLayer(
             activate_fn=activate_fn, max_way=max_out_way, input_dim=output_dim

@@ -281,7 +281,7 @@ class LitAtomsDataset(pl.LightningDataModule):
         log.debug("Calculating ground energy...")
         if len(energy) > 0:
             A = np.array([element_count[k] for k in self.stats["all_elements"]]).T
-            self.stats["ground_energy"] = list(np.linalg.lstsq(A, energy, rcond=None)[0])
+            self.stats["ground_energy"] = np.linalg.lstsq(A, energy, rcond=None)[0].tolist()
         else:
             self.stats["ground_energy"] = [0.]
 

@@ -140,13 +140,17 @@ class SpinConvLayer(nn.Module):
         self.spin_radial_fn = spin_radial_fn
         self.rbf_mixing_list = nn.ModuleList(
             [
-                nn.Linear(radial_fn.n_channel, output_dim * self.n_cheb)
+                ElementLinear(
+                    EnvPara.ELEMENTS, radial_fn.n_channel, output_dim * self.n_cheb, bias=False
+                )
                 for r_way in range(max_r_way + 1)
             ]
         )
         self.spin_rbf_mixing_list = nn.ModuleList(
             [
-                nn.Linear(spin_radial_fn.n_channel, output_dim * self.n_cheb)
+                ElementLinear(
+                    EnvPara.ELEMENTS, spin_radial_fn.n_channel, output_dim * self.n_cheb, bias=False
+                )
                 for m_way in range(max_r_way + 1)
             ]
         )
@@ -163,6 +167,7 @@ class SpinConvLayer(nn.Module):
         # 既然如此可以将spin_spin_product替换成径向函数与sisj函数的直积
 
         self.node_sr_product = TensorProductLayer(
+                input_dim=output_dim, output_dim=output_dim,
             max_x_way=max_in_way, max_y_way=max_r_way, max_z_way=max_out_way
         )
         self.max_in_way = max_in_way
@@ -190,9 +195,9 @@ class SpinConvLayer(nn.Module):
         for way, (rbf_mixing, spin_rbf_mixing) in enumerate(
             zip(self.rbf_mixing_list, self.spin_rbf_mixing_list)
         ):
-            sb = spin_rbf_mixing(spin_rbf_i)  # [n_node, n_channel]
+            sb = spin_rbf_mixing(spin_rbf_i, batch_data)  # [n_node, n_channel]
             hehe = (
-                rbf_mixing(rbf_ij) * sb[idx_i] * sb[idx_j]
+                rbf_mixing(rbf_ij, batch_data) * sb[idx_i] * sb[idx_j]
             )  # f(rij)g(mi)g(mj)  [n_edge, n_channel]
             xixi = hehe.view(n_edge, self.n_cheb, -1) * spin_basis.unsqueeze(-1)
             r[way] = find_moment(batch_data, way).unsqueeze(1) * expand_to(
