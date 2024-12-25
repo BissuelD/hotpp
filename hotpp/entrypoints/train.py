@@ -325,6 +325,9 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
     if "l3_tensor" in target:
         target_way["l3_tensor_diag"] = 1
         target_way["l3_tensor_offdiag"] = 3
+    if "peratom_l3_tensor" in target:
+        target_way["peratom_l3_tensor_diag"] = 1
+        target_way["peratom_l3_tensor_offdiag"] = 3
     cut_fn = get_cutoff(p_dict)
     emb = AtomicEmbedding(
         elements, model_dict['nEmbedding']

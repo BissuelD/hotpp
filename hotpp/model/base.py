@@ -52,6 +52,13 @@ class AtomicModule(nn.Module):
             polar = (polar + polar.permute(0, 1, 3, 2) + polar.permute(0, 2, 1, 3) + 
                      polar.permute(0, 2, 3, 1) + polar.permute(0, 3, 1, 2) + polar.permute(0, 3, 2, 1)) / 6
             batch_data['l3_tensor_p'] = polar
+        if 'peratom_l3_tensor_diag' in output_tensors:
+            polar_diag = output_tensors['peratom_l3_tensor_diag']
+            polar_off_diagonal = output_tensors['peratom_l3_tensor_offdiag']
+            polar = expand_to(polar_diag, 4, -1) * expand_to(torch.eye(3, device=polar_diag.device), 4, 0) + polar_off_diagonal
+            polar = (polar + polar.permute(0, 1, 3, 2) + polar.permute(0, 2, 1, 3) + 
+                     polar.permute(0, 2, 3, 1) + polar.permute(0, 3, 1, 2) + polar.permute(0, 3, 2, 1)) / 6
+            batch_data['peratom_l3_tensor_p'] = polar
         if 'site_energy' in output_tensors:
             site_energy = output_tensors['site_energy']
         #######################################
@@ -130,6 +137,9 @@ class MultiAtomicModule(AtomicModule):
         if 'l3_tensor_diag' in self.target_way:
             output_tensors['l3_tensor_diag'] = torch.zeros((n_atoms, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
             output_tensors['l3_tensor_offdiag'] = torch.zeros((n_atoms, n_dim, n_dim, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
+        if 'peratom_l3_tensor_diag' in self.target_way:
+            output_tensors['peratom_l3_tensor_diag'] = torch.zeros((n_atoms, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
+            output_tensors['peratom_l3_tensor_offdiag'] = torch.zeros((n_atoms, n_dim, n_dim, n_dim), dtype=batch_data['coordinate'].dtype, device=device)
 
         for name, model in self.models.items():
             for target in self.target_way:
