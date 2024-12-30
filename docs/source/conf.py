@@ -15,6 +15,8 @@ import sys
 # sys.path.insert(0, os.path.abspath('../../hotpp'))
 
 import shutil
+if os.path.exists("examples"):
+    shutil.rmtree("examples")
 shutil.copytree('../../examples', 'examples')
 # -- Project information -----------------------------------------------------
 

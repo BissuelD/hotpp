@@ -8,4 +8,4 @@ Some examples of HotPP
     :caption: Contents:
 
     examples/carbon/carbon
-    .. examples/water/water
+    examples/water/water
