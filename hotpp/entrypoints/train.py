@@ -58,7 +58,7 @@ DefaultPara = {
     "Model": {
         "net": "miao",
         "convMode": "node_j",
-        "eleMode": "node_edge",
+        "eleMode": "none",
         "updateEdge": "no_update",
         "activateFn": "silu",
         "nEmbedding": 64,

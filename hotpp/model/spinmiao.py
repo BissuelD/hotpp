@@ -158,7 +158,7 @@ class SpinConvLayer(nn.Module):
             input_dim=input_dim, max_way=max_in_way, output_dim=output_dim
         )
         self.V = SelfInteractionLayer(
-            input_dim=self.n_cheb * output_dim, max_way=max_r_way, output_dim=output_dim
+            input_dim=self.n_cheb * output_dim, max_way=max_r_way, output_dim=output_dim, bias=False
         )
 
         # 如果不考虑自旋轨道耦合，输出的维度应该只有0维，

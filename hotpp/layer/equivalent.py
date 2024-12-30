@@ -93,12 +93,13 @@ class SelfInteractionLayer(nn.Module):
         input_dim: int,
         max_way: int,
         output_dim: int = 10,
+        bias: bool=True,
     ) -> None:
         super().__init__()
         # only the way 0 can have bias
         self.linear_list = nn.ModuleList(
             [
-                nn.Linear(input_dim, output_dim, bias=(way == 0))
+                nn.Linear(input_dim, output_dim, bias=(way == 0 and bias))
                 for way in range(max_way + 1)
             ]
         )
@@ -295,11 +296,11 @@ class GraphConvLayer(nn.Module):
 
         if self.conv_mode == 'node_j':
             self.U = SelfInteractionLayer(
-                input_dim=input_dim, max_way=max_in_way, output_dim=output_dim
+                input_dim=input_dim, max_way=max_in_way, output_dim=output_dim,
             )
         elif self.conv_mode == 'node_edge':
             self.U = SelfInteractionLayer(
-                input_dim=input_dim * 3, max_way=max_in_way, output_dim=output_dim
+                input_dim=input_dim * 3, max_way=max_in_way, output_dim=output_dim,
             )
         self.tensor_product = TensorProductLayer(
             input_dim=output_dim,
