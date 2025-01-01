@@ -79,16 +79,13 @@ class MLPPoly(RadialLayer):
         self.n_hidden = n_hidden
         self.radial_fn = radial_fn
         self.activate_fn = activate_fn
-        x = [nn.Linear(radial_fn.n_channel, n_hidden[0])]
+        x = [nn.Linear(radial_fn.n_channel, n_hidden[0], bias=False)]
         for n_in, n_out in zip(n_hidden[:-1], n_hidden[1:]):
             x.extend([activate_fn, nn.Linear(n_in, n_out)])
         self.mlp = nn.Sequential(*x)
 
-    def forward(self,
-                distances: torch.Tensor,
-                ) -> torch.Tensor:
-        out = self.mlp(self.radial_fn(distances))
-        return out
+    def radial(self, d: torch.Tensor) -> torch.Tensor:
+        return self.mlp(self.radial_fn(d.squeeze(1)))
 
     def replicate(self):
         return self.__class__(self.n_hidden, self.radial_fn.replicate(), self.activate_fn, self.cutoff_fn)

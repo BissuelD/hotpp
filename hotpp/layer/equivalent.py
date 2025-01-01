@@ -93,12 +93,13 @@ class SelfInteractionLayer(nn.Module):
         input_dim: int,
         max_way: int,
         output_dim: int = 10,
+        bias: bool=True,
     ) -> None:
         super().__init__()
         # only the way 0 can have bias
         self.linear_list = nn.ModuleList(
             [
-                nn.Linear(input_dim, output_dim, bias=(way == 0))
+                nn.Linear(input_dim, output_dim, bias=(way == 0 and bias))
                 for way in range(max_way + 1)
             ]
         )
@@ -258,6 +259,7 @@ class GraphConvLayer(nn.Module):
     def __init__(
         self,
         radial_fn: RadialLayer,
+        cutoff_fn: CutoffLayer,
         input_dim: int,
         output_dim: int,
         max_in_way: int = 2,
@@ -281,11 +283,12 @@ class GraphConvLayer(nn.Module):
         super().__init__()
         self.conv_mode = EnvPara.CONV_MODE
         self.radial_fn = radial_fn
+        self.cutoff_fn = cutoff_fn
         rbf_mixing_list = []
         for r_way in range(max_r_way + 1):
             rbf_mixing_list.append(
                 ElementLinear(
-                    EnvPara.ELEMENTS, radial_fn.n_channel, output_dim, bias=True
+                    EnvPara.ELEMENTS, radial_fn.n_channel, output_dim, bias=False
                 )
             )
 
@@ -293,11 +296,11 @@ class GraphConvLayer(nn.Module):
 
         if self.conv_mode == 'node_j':
             self.U = SelfInteractionLayer(
-                input_dim=input_dim, max_way=max_in_way, output_dim=output_dim
+                input_dim=input_dim, max_way=max_in_way, output_dim=output_dim,
             )
         elif self.conv_mode == 'node_edge':
             self.U = SelfInteractionLayer(
-                input_dim=input_dim * 3, max_way=max_in_way, output_dim=output_dim
+                input_dim=input_dim * 3, max_way=max_in_way, output_dim=output_dim,
             )
         self.tensor_product = TensorProductLayer(
             input_dim=output_dim,
@@ -319,6 +322,7 @@ class GraphConvLayer(nn.Module):
         idx_j = batch_data['idx_j']
         _, dij, _ = find_distances(batch_data)
         rbf_ij = self.radial_fn(dij)
+        cut_ij = self.cutoff_fn(dij)
         x = torch.jit.annotate(Dict[int, torch.Tensor], {})
         y = torch.jit.annotate(Dict[int, torch.Tensor], {})
         for in_way in range(self.max_in_way + 1):
@@ -329,7 +333,7 @@ class GraphConvLayer(nn.Module):
                     [
                         node_info[in_way][idx_i],
                         node_info[in_way][idx_j],
-                        edge_info[in_way],
+                        edge_info[in_way] * expand_to(cut_ij, in_way + 2),
                     ],
                     dim=1,
                 )
@@ -354,6 +358,7 @@ class AllegroGraphConvLayer(nn.Module):
 
     def __init__(
         self,
+        cutoff_fn: CutoffLayer,
         input_dim: int,
         output_dim: int,
         max_in_way: int = 2,
@@ -375,6 +380,7 @@ class AllegroGraphConvLayer(nn.Module):
                 Defaults to 'node_j'.
         """
         super().__init__()
+        self.cutoff_fn = cutoff_fn
         self.conv_mode = EnvPara.CONV_MODE
         edge_scalar_mixing_list = []
         for r_way in range(max_r_way + 1):
@@ -403,7 +409,11 @@ class AllegroGraphConvLayer(nn.Module):
         batch_data: Dict[str, torch.Tensor],
     ):
         idx_j = batch_data['idx_j']
-
+        if self.cutoff_fn is None:
+            smooth_edge_scalar = edge_info[0]
+        else:
+            _, dij, _ = find_distances(batch_data)
+            smooth_edge_scalar = edge_info[0] * self.cutoff_fn(dij).unsqueeze(1)
         x = torch.jit.annotate(Dict[int, torch.Tensor], {})
         y = torch.jit.annotate(Dict[int, torch.Tensor], {})
         for in_way in range(self.max_in_way + 1):
@@ -411,7 +421,7 @@ class AllegroGraphConvLayer(nn.Module):
         x = self.U(x)
 
         for r_way, edge_scalar_mixing in enumerate(self.edge_scalar_mixing_list):
-            fn = edge_scalar_mixing(edge_info[0], batch_data)
+            fn = edge_scalar_mixing(smooth_edge_scalar, batch_data)
             y[r_way] = find_moment(batch_data, r_way).unsqueeze(1) * expand_to(
                 fn, n_dim=r_way + 2
             )
