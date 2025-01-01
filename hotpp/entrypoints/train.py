@@ -58,7 +58,7 @@ DefaultPara = {
     "Model": {
         "net": "miao",
         "convMode": "node_j",
-        "eleMode": "node_edge",
+        "eleMode": "none",
         "updateEdge": "no_update",
         "activateFn": "silu",
         "nEmbedding": 64,
@@ -282,6 +282,7 @@ def get_radial(p_dict, cutoff_fn):
     else:
         raise Exception("Unsupported radial type: {}!".format(radial_dict['type']))
     if "MLP" in radial_dict['type']:
+        radial_fn.cutoff_fn = None
         if radial_dict["activateFn"] == "silu":
             activate_fn = nn.SiLU()
         elif radial_dict["activateFn"] == "relu":
@@ -296,6 +297,7 @@ def get_radial(p_dict, cutoff_fn):
             n_hidden=radial_dict['nHidden'],
             radial_fn=radial_fn,
             activate_fn=activate_fn,
+            cutoff_fn=cutoff_fn,
         )
     else:
         return radial_fn
@@ -319,6 +321,15 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
         target_way["polar_off_diagonal"] = 2
     if "direct_forces" in target:
         target_way["direct_forces"] = 1
+    if "peratom_tensor" in target:
+        target_way["peratom_tensor_diag"] = 0
+        target_way["peratom_tensor_offdiag"] = 2
+    if "l3_tensor" in target:
+        target_way["l3_tensor_diag"] = 1
+        target_way["l3_tensor_offdiag"] = 3
+    if "peratom_l3_tensor" in target:
+        target_way["peratom_l3_tensor_diag"] = 1
+        target_way["peratom_l3_tensor_offdiag"] = 3
     cut_fn = get_cutoff(p_dict)
     emb = AtomicEmbedding(
         elements, model_dict['nEmbedding']
@@ -358,7 +369,6 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
             mean=mean,
             std=std,
             norm_factor=n_neighbor,
-            update_edge=model_dict['updateEdge'],
         ).to(p_dict['device'])
     elif model_dict['net'] == 'spinmiao':
         max_r_way = expand_para(
@@ -443,17 +453,12 @@ def main(
         "cutoff": float(p_dict["cutoff"]),
         "nNeighbor": float(n_neighbor),
         "elements": elements,
-        "ground_energy": (
-            ground_energy.tolist()
-            if isinstance(ground_energy, np.ndarray)
-            else ground_energy
-        ),
+        "ground_energy": [float(e) for e in ground_energy],
         "std": float(std),
         "mean": float(mean),
     }
     with open("metadata.yaml", "w") as f:
         yaml.dump(stats, f)
-
     if load_model is not None and 'ckpt' not in load_model:
         log.info(f"Load model from {load_model}")
         model = torch.load(load_model)

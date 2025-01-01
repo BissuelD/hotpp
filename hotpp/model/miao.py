@@ -36,6 +36,7 @@ class UpdateNodeBlock(nn.Module):
         super().__init__()
         self.graph_conv = GraphConvLayer(
             radial_fn=radial_fn,
+            cutoff_fn=radial_fn.cutoff_fn,
             input_dim=input_dim,
             output_dim=output_dim,
             max_in_way=max_in_way,
@@ -43,7 +44,7 @@ class UpdateNodeBlock(nn.Module):
             max_r_way=max_r_way,
         )
         self.self_interact = SelfInteractionLayer(
-            input_dim=input_dim, max_way=max_out_way, output_dim=output_dim
+            input_dim=output_dim, max_way=max_out_way, output_dim=output_dim
         )
         self.non_linear = NonLinearLayer(
             activate_fn=activate_fn, max_way=max_out_way, input_dim=output_dim
@@ -85,6 +86,7 @@ class UpdateEdgeBlock(nn.Module):
         if EnvPara.EDGE_UPDATE_MODE == 'distance':
             self.graph_conv = GraphConvLayer(
                 radial_fn=radial_fn,
+                cutoff_fn=radial_fn.cutoff_fn,
                 input_dim=input_dim,
                 output_dim=output_dim,
                 max_in_way=max_in_way,
@@ -93,6 +95,7 @@ class UpdateEdgeBlock(nn.Module):
             )
         elif EnvPara.EDGE_UPDATE_MODE == 'Allegro':
             self.graph_conv = AllegroGraphConvLayer(
+                cutoff_fn=radial_fn.cutoff_fn,
                 input_dim=input_dim,
                 output_dim=output_dim,
                 max_in_way=max_in_way,
@@ -100,7 +103,7 @@ class UpdateEdgeBlock(nn.Module):
                 max_r_way=max_r_way,
             )
         self.self_interact = SelfInteractionLayer(
-            input_dim=input_dim, max_way=max_out_way, output_dim=output_dim
+            input_dim=output_dim, max_way=max_out_way, output_dim=output_dim
         )
         self.non_linear = NonLinearLayer(
             activate_fn=activate_fn, max_way=max_out_way, input_dim=output_dim
@@ -239,6 +242,9 @@ class MiaoNet(AtomicModule):
         if 'polar_diag' in output_tensors:
             output_tensors['polar_diag'] = output_tensors['polar_diag'] * self.std + self.mean
             output_tensors['polar_off_diagonal'] = output_tensors['polar_off_diagonal'] * self.std
+        if 'peratom_tensor_diag' in output_tensors:
+            output_tensors['peratom_tensor_diag'] = output_tensors['peratom_tensor_diag'] * self.std + self.mean
+            output_tensors['peratom_tensor_offdiag'] = output_tensors['peratom_tensor_offdiag'] * self.std
         return output_tensors
 
     def get_init_info(

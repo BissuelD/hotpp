@@ -5,9 +5,9 @@
 
 Welcome to HotPP's documentation!
 =================================
-`HotPP` is an open-source package designed for constructing message 
-passing network interatomic potentials. It facilitates the utilization 
-of arbitrary order Cartesian tensors as messages while maintaining 
+`HotPP` is an open-source package designed for constructing message
+passing network interatomic potentials. It facilitates the utilization
+of arbitrary order Cartesian tensors as messages while maintaining
 equivalence maintenance.
 
 
