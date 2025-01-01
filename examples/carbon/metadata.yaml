@@ -1,0 +1,27 @@
+cutoff: 3.0
+elements:
+- 6
+ground_energy:
+- !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    1/+9GQqYY8A=
+mean: 0.0
+nNeighbor: 13.572470657917297
+std: !!python/object/apply:numpy.core.multiarray.scalar
+- *id001
+- !!binary |
+  tGhu02/zBkA=

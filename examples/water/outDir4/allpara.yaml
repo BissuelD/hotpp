@@ -1,0 +1,78 @@
+Data:
+  batchType: structure
+  elements: null
+  groundEnergy: null
+  mean: 0.0
+  meta: null
+  nNeighbor: null
+  numWorkers: 0
+  path: data
+  pinMemory: false
+  std: 1.0
+  testBatch: 16
+  testSet: test.xyz
+  trainBatch: 16
+  trainSet: train.xyz
+  type: ase
+Model:
+  CutoffLayer:
+    p: 5
+    type: poly
+  RadialLayer:
+    activateFn: silu
+    nBasis: 8
+    nHidden:
+    - 64
+    - 64
+    type: besselMLP
+  Repulsion: 0
+  Spin: false
+  activateFn: silu
+  convMode: node_j
+  eleMode: node_edge
+  maxMWay: 2
+  maxNBody: 3
+  maxOutWay: 2
+  maxRWay: 2
+  nEmbedding: 64
+  nHidden: 64
+  nLayer: 4
+  net: miao
+  targetWay:
+    0: site_energy
+  updateEdge: no_update
+Train:
+  LrScheduler:
+    lrFactor: 0.8
+    patience: 500
+    type: reduceOnPlateau
+  Optimizer:
+    amsGrad: true
+    learningRate: 0.001
+    type: AdamW
+    weightDecay: 0.0
+  allowMissing: false
+  amsGrad: true
+  emaDecay: 0.0
+  epoch: 50000
+  evalEpochInterval: 10
+  evalStepInterval: 1.0
+  evalTest: true
+  forceScale: 0.0
+  gradClip: null
+  huberDelta: -1.0
+  logInterval: 50
+  maxEpoch: 10000
+  maxStep: 1000000
+  saveStart: 1000
+  targetProp:
+  - dipole
+  warmupSteps: 500
+  weight:
+  - 1.0
+cutoff: 4.0
+device: cuda
+outputDir: /home/gegejun/work/tpn/examples/water/outDir
+precision: float
+seed: 0
+workDir: /home/gegejun/work/tpn/examples/water

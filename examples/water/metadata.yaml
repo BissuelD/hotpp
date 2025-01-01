@@ -1,0 +1,9 @@
+cutoff: 4.0
+elements:
+- 1
+- 8
+ground_energy:
+- 0.0
+mean: 0.0
+nNeighbor: 25.826607142857142
+std: 1.0
