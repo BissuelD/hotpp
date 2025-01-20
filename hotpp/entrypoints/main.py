@@ -9,11 +9,7 @@ def parse_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-v",
-        "--version",
-        help="print version",
-        action='version',
-        version=__version__
+        "-v", "--version", help="print version", action='version', version=__version__
     )
     parser_log = argparse.ArgumentParser(
         add_help=False, formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -46,14 +42,10 @@ def parse_args():
         "--input_file",
         type=str,
         default="input.yaml",
-        help="the input parameter file in yaml format"
+        help="the input parameter file in yaml format",
     )
     parser_train.add_argument(
-        "-o",
-        "--output_folder",
-        type=str,
-        default="outDir",
-        help="the output folder"
+        "-o", "--output_folder", type=str, default="outDir", help="the output folder"
     )
     parser_train.add_argument(
         "--load_model",
@@ -74,45 +66,18 @@ def parse_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser_eval.add_argument(
-        "-m",
-        "--modelfile",
-        type=str,
-        default="model.pt",
-        help="model"
+        "-m", "--modelfile", type=str, default="model.pt", help="model"
+    )
+    parser_eval.add_argument("-i", "--indices", type=str, default=None, help="indices")
+    parser_eval.add_argument(
+        "--device", choices=["cuda", "cpu"], default="cpu", help="device"
     )
     parser_eval.add_argument(
-        "-i",
-        "--indices",
-        type=str,
-        default=None,
-        help="indices"
+        "-d", "--datafile", type=str, default="data.traj", help="dataset"
     )
+    parser_eval.add_argument("-f", "--format", type=str, default=None, help="format")
     parser_eval.add_argument(
-        "--device",
-        choices=["cuda", "cpu"],
-        default="cpu",
-        help="device"
-    )
-    parser_eval.add_argument(
-        "-d",
-        "--datafile",
-        type=str,
-        default="data.traj",
-        help="dataset"
-    )
-    parser_eval.add_argument(
-        "-f",
-        "--format",
-        type=str,
-        default=None,
-        help="format"
-    )
-    parser_eval.add_argument(
-        "-b",
-        "--batchsize",
-        type=int,
-        default=32,
-        help="batchsize"
+        "-b", "--batchsize", type=int, default=32, help="batchsize"
     )
     parser_eval.add_argument(
         "-p",
@@ -120,24 +85,11 @@ def parse_args():
         type=str,
         nargs="+",
         default=["energy", "forces"],
-        help="target properties"
+        help="target properties",
     )
-    parser_eval.add_argument(
-        "--num_workers",
-        type=int,
-        default=4,
-        help="num workder"
-    )
-    parser_eval.add_argument(
-        "--pin_memory",
-        action="store_true",
-        help="pin memory"
-    )
-    parser_eval.add_argument(
-        "--spin",
-        action="store_true",
-        help="has spin"
-    )
+    parser_eval.add_argument("--num_workers", type=int, default=4, help="num workder")
+    parser_eval.add_argument("--pin_memory", action="store_true", help="pin memory")
+    parser_eval.add_argument("--spin", action="store_true", help="has spin")
     # clean
     parser_clean = subparsers.add_parser(
         "clean",
@@ -156,7 +108,7 @@ def parse_args():
         type=str,
         nargs="+",
         default=["per_energy", "forces"],
-        help="target properties"
+        help="target properties",
     )
     # freeze
     parser_freeze = subparsers.add_parser(
@@ -172,19 +124,10 @@ def parse_args():
         help="model",
     )
     parser_freeze.add_argument(
-        "-s",
-        "--symbols",
-        type=str,
-        nargs="+",
-        default=None,
-        help="symbols"
+        "-s", "--symbols", type=str, nargs="+", default=None, help="symbols"
     )
     parser_freeze.add_argument(
-        "-d",
-        "--device",
-        choices=["cuda", "cpu"],
-        default="cpu",
-        help="device"
+        "-d", "--device", choices=["cuda", "cpu"], default="cpu", help="device"
     )
     parser_freeze.add_argument(
         "-o",
@@ -192,11 +135,55 @@ def parse_args():
         default="infer.pt",
         help="output",
     )
-    parser_freeze.add_argument(
-        "--double",
-        action="store_true",
-        help="float64"
+    parser_freeze.add_argument("--double", action="store_true", help="float64")
+    parser_transform = subparsers.add_parser(
+        "transform",
+        help="transform data",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser_transform.add_argument(
+        "-c",
+        "--cutoff",
+        type=float,
+        help="cutoff",
+    )
+    parser_transform.add_argument(
+        "-i",
+        "--indices",
+        type=str,
+        default=None,
+        help="indices file",
+    )
+    parser_transform.add_argument(
+        "datapath",
+        nargs="?",
+        default=None,
+        type=str,
+        help="datapath",
+    )
+    parser_transform.add_argument(
+        "-t",
+        "--datatype",
+        type=str,
+        default="ase",
+        help="datapath",
+    )
+    parser_transform.add_argument(
+        "-p",
+        "--properties",
+        type=str,
+        nargs="+",
+        default=["energy", "forces"],
+        help="target properties",
+    )
+    parser_transform.add_argument(
+        "-b", "--batchsize", type=int, default=32, help="batchsize"
+    )
+    parser_transform.add_argument(
+        "--num_workers", type=int, default=4, help="num workder"
+    )
+    parser_transform.add_argument("--spin", action="store_true", help="has spin")
+
     parsed_args = parser.parse_args()
     if parsed_args.command is None:
         print(__picture__)
@@ -208,7 +195,9 @@ def main():
     args = parse_args()
     dict_args = vars(args)
     if args.command in ['train']:
-        set_logger(name='hotpp', level=dict_args['log_level'], log_path=dict_args['log_path'])
+        set_logger(
+            name='hotpp', level=dict_args['log_level'], log_path=dict_args['log_path']
+        )
         log = logging.getLogger(__name__)
         log.info(__picture__)
         # git info
@@ -216,24 +205,42 @@ def main():
         hotpp_path = os.path.dirname(os.path.dirname(__file__))
         os.chdir(hotpp_path)
         try:
-            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).strip().decode('utf-8')
-            commit_id = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode('utf-8')
-            commit_message = subprocess.check_output(['git', 'log', '-1', '--pretty=%B']).strip().decode('utf-8')
+            branch = (
+                subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
+                .strip()
+                .decode('utf-8')
+            )
+            commit_id = (
+                subprocess.check_output(['git', 'rev-parse', 'HEAD'])
+                .strip()
+                .decode('utf-8')
+            )
+            commit_message = (
+                subprocess.check_output(['git', 'log', '-1', '--pretty=%B'])
+                .strip()
+                .decode('utf-8')
+            )
             diff = subprocess.check_output(['git', 'diff']).strip().decode('utf-8')
-            log.debug(f"\nBranch: {branch}\n"
-                      f"Commit ID: {commit_id}\n"
-                      f"Commit Message: {commit_message}\n"
-                      f"Diff: \n{diff}\n")
+            log.debug(
+                f"\nBranch: {branch}\n"
+                f"Commit ID: {commit_id}\n"
+                f"Commit Message: {commit_message}\n"
+                f"Diff: \n{diff}\n"
+            )
         except:
             log.debug("Error: Not a git repository or some git command failed.")
         os.chdir(pwd)
 
     if args.command:
         try:
-            f = getattr(importlib.import_module('hotpp.entrypoints.{}'.format(args.command)), "main")
+            f = getattr(
+                importlib.import_module('hotpp.entrypoints.{}'.format(args.command)),
+                "main",
+            )
         except:
             raise RuntimeError(f"unknown command {args.command}")
         f(**dict_args)
+
 
 if __name__ == "__main__":
     main()

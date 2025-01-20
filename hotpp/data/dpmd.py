@@ -1,4 +1,4 @@
-from .base import AtomsDataset
+from .utils import AtomsDataset, register_dataset
 from typing import List, Optional
 import glob, os
 import numpy as np
@@ -14,8 +14,7 @@ def expand_path(path_list: List[str]):
     return all_path
 
 
-def read_dpdata(path: str,
-                properties: Optional[List[str]]=['energy', 'forces']):
+def read_dpdata(path: str, properties: Optional[List[str]] = ['energy', 'forces']):
     frames = []
     with open(os.path.join(path, "type_map.raw")) as f:
         type_map_list = f.read().splitlines()
@@ -43,7 +42,8 @@ def read_dpdata(path: str,
                 pbc=True,
                 symbols=real_symbols,
                 positions=coord[i].reshape(-1, 3),
-                cell=box[i].reshape(3, 3))
+                cell=box[i].reshape(3, 3),
+            )
             info = {}
             if "energy" in properties:
                 info["energy"] = atoms_info["energy"][i]
@@ -58,18 +58,22 @@ def read_dpdata(path: str,
     return frames
 
 
+@register_dataset("dpmd")
 class DeePMDData(AtomsDataset):
 
-    def __init__(self,
-                 path_list  : Optional[List[str]]=None,
-                 indices    : Optional[List[int]]=None,
-                 properties : Optional[List[str]]=['energy', 'forces'],
-                 spin       : bool=False,
-                 cutoff     : float=4.0,
-                 ) -> None:
+    def __init__(
+        self,
+        datapath: Optional[List[str]] = None,
+        indices: Optional[List[int]] = None,
+        properties: Optional[List[str]] = ['energy', 'forces'],
+        spin: bool = False,
+        cutoff: float = 4.0,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(indices=indices, cutoff=cutoff)
         frames = []
-        for path in expand_path(path_list):
+        for path in expand_path(datapath):
             frames.extend(read_dpdata(path, properties))
         self.frames = frames
         self.properties = properties
@@ -84,20 +88,20 @@ class DeePMDData(AtomsDataset):
     def __getitem__(self, idx):
         if self.indices is not None:
             idx = self.indices[idx]
-        data = self.atoms_to_data(self.frames[idx],
-                                  properties=self.properties,
-                                  cutoff=self.cutoff,
-                                  spin=self.spin)
+        data = self.atoms_to_data(
+            self.frames[idx],
+            properties=self.properties,
+            cutoff=self.cutoff,
+            spin=self.spin,
+        )
         return data
 
-    def extend(self,
-               frames: Optional[List[Atoms]]=None,
-               path_list: Optional[List[str]]=None):
+    def extend(
+        self, frames: Optional[List[Atoms]] = None, datapath: Optional[List[str]] = None
+    ):
         if frames is not None:
             self.frames.extend(frames)
-        if path_list is not None:
+        if datapath is not None:
             frames = []
-            for path in expand_path(path_list):
+            for path in expand_path(datapath):
                 frames.extend(read_dpdata(path, self.properties))
-            self.frames.extend(frames)
-

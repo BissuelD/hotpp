@@ -5,17 +5,35 @@ import numpy as np
 from ..utils import EnvPara
 from torch.utils.data import Dataset, Sampler
 from ase.neighborlist import neighbor_list
-from typing import Optional, List, Iterator
+from typing import Optional, List, Iterator, Union
+import logging
+import numpy as np
 
+
+log = logging.getLogger(__name__)
 
 __all__ = ["AtomsDataset", "atoms_collate_fn", "MaxNodeSampler", "MaxEdgeSampler"]
+
+dataset_mapping = {}
+
+
+def register_dataset(name: str):
+    def decorator(cls):
+        dataset_mapping[name] = cls
+        return cls
+
+    return decorator
+
+
 # TODO: offset and scaling for different condition
 class AtomsDataset(Dataset, abc.ABC):
 
     @staticmethod
     def atoms_to_data(atoms, cutoff, properties=['energy', 'forces'], spin=False):
         dim = len(atoms.get_cell())
-        idx_i, idx_j, offset = neighbor_list("ijS", atoms, cutoff, self_interaction=False)
+        idx_i, idx_j, offset = neighbor_list(
+            "ijS", atoms, cutoff, self_interaction=False
+        )
         offset = np.array(offset) @ atoms.get_cell()
 
         data = {
@@ -34,7 +52,9 @@ class AtomsDataset(Dataset, abc.ABC):
                     atoms.info['spin'] = atoms.get_magnetic_moments()
                 except:
                     atoms.info['spin'] = np.zeros((len(atoms), 3))
-            data['spin'] = torch.tensor(atoms.info['spin'], dtype=EnvPara.FLOAT_PRECISION)
+            data['spin'] = torch.tensor(
+                atoms.info['spin'], dtype=EnvPara.FLOAT_PRECISION
+            )
 
         if 'energy' in properties:
             if 'energy' not in atoms.info:
@@ -58,7 +78,9 @@ class AtomsDataset(Dataset, abc.ABC):
                     pass
 
         if 'virial' in properties:
-            data["scaling"] = torch.eye(dim, dtype=EnvPara.FLOAT_PRECISION).view(1, dim, dim)
+            data["scaling"] = torch.eye(dim, dtype=EnvPara.FLOAT_PRECISION).view(
+                1, dim, dim
+            )
             if 'virial' not in atoms.info:
                 if 'stress' not in atoms.info:
                     try:
@@ -68,17 +90,21 @@ class AtomsDataset(Dataset, abc.ABC):
                 if 'stress' in atoms.info:
                     stress = np.array(atoms.info['stress'])
                     if stress.shape == (6,):
-                        stress = np.array([[stress[0], stress[5], stress[4]],
-                                           [stress[5], stress[1], stress[3]],
-                                           [stress[4], stress[3], stress[2]]])
+                        stress = np.array(
+                            [
+                                [stress[0], stress[5], stress[4]],
+                                [stress[5], stress[1], stress[3]],
+                                [stress[4], stress[3], stress[2]],
+                            ]
+                        )
                     atoms.info['virial'] = -atoms.get_volume() * stress
 
         padding_shape = {
-            'site_energy' : (len(atoms)),
-            'energy'      : (1),
-            'forces'      : (len(atoms), dim),
-            'virial'      : (1, dim, dim),
-            'dipole'      : (1, dim),
+            'site_energy': (len(atoms)),
+            'energy': (1),
+            'forces': (len(atoms), dim),
+            'virial': (1, dim, dim),
+            'dipole': (1, dim),
             'polarizability': (1, dim, dim),
             'spin_torques': (len(atoms), dim),
             'direct_forces': (len(atoms), dim),
@@ -88,20 +114,31 @@ class AtomsDataset(Dataset, abc.ABC):
         }
         for key in properties:
             if key in atoms.info:
-                data[key + '_t'] = torch.tensor(atoms.info[key], dtype=EnvPara.FLOAT_PRECISION).reshape(padding_shape[key])
+                data[key + '_t'] = torch.tensor(
+                    atoms.info[key], dtype=EnvPara.FLOAT_PRECISION
+                ).reshape(padding_shape[key])
                 if key + 'weight' in atoms.info:
-                    data[key + '_weight'] = torch.tensor(atoms.info[key + '_weight'], dtype=EnvPara.FLOAT_PRECISION).reshape(padding_shape[key])
+                    data[key + '_weight'] = torch.tensor(
+                        atoms.info[key + '_weight'], dtype=EnvPara.FLOAT_PRECISION
+                    ).reshape(padding_shape[key])
                 else:
-                    data[key + '_weight'] = torch.ones(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
+                    data[key + '_weight'] = torch.ones(
+                        padding_shape[key], dtype=EnvPara.FLOAT_PRECISION
+                    )
             else:
-                data[key + '_t'] = torch.zeros(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
-                data[key + '_weight'] = torch.zeros(padding_shape[key], dtype=EnvPara.FLOAT_PRECISION)
+                data[key + '_t'] = torch.zeros(
+                    padding_shape[key], dtype=EnvPara.FLOAT_PRECISION
+                )
+                data[key + '_weight'] = torch.zeros(
+                    padding_shape[key], dtype=EnvPara.FLOAT_PRECISION
+                )
         return data
 
-    def __init__(self,
-                 indices: Optional[List[int]]=None,
-                 cutoff : float=4.0,
-                 ) -> None:
+    def __init__(
+        self,
+        indices: Optional[List[int]] = None,
+        cutoff: float = 4.0,
+    ) -> None:
         self.indices = indices
         self.cutoff = cutoff
 
@@ -121,6 +158,7 @@ class AtomsDataset(Dataset, abc.ABC):
             ds.indices = indices
         return ds
 
+
 def atoms_collate_fn(batch):
 
     elem = batch[0]
@@ -134,13 +172,15 @@ def atoms_collate_fn(batch):
     # [0, 0, 1, 1] + [0, 0, 1, 2] -> [0, 0, 1, 1, 2, 2, 3, 4]
     for key in ["idx_i", "idx_j"]:
         coll_batch[key] = torch.cat(
-            [batch[i][key] + torch.sum(coll_batch["n_atoms"][:i]) for i in range(len(batch))], dim=0
+            [
+                batch[i][key] + torch.sum(coll_batch["n_atoms"][:i])
+                for i in range(len(batch))
+            ],
+            dim=0,
         )
 
     coll_batch["batch"] = torch.repeat_interleave(
-        torch.arange(len(batch)),
-        repeats=coll_batch["n_atoms"].to(torch.long),
-        dim=0
+        torch.arange(len(batch)), repeats=coll_batch["n_atoms"].to(torch.long), dim=0
     )
     # coll_batch["n_batch"] = len(batch)
     # coll_batch["n_dim"] = elem["coordinate"].shape[1]
@@ -149,9 +189,7 @@ def atoms_collate_fn(batch):
 
 class MaxNodeSampler(Sampler):
 
-    def __init__(self, 
-                 sampler: Sampler[int], 
-                 batch_size: int) -> None:
+    def __init__(self, sampler: Sampler[int], batch_size: int) -> None:
 
         self.sampler = sampler
         self.batch_size = batch_size
@@ -159,7 +197,9 @@ class MaxNodeSampler(Sampler):
         for idx in self.sampler:
             self.node_num[idx] = self.sampler.data_source[idx]["n_atoms"]
         if max(self.node_num) > self.batch_size:
-            raise Exception(f"Max atoms in one structure {max(self.node_num)} > batch_size {self.batch_size}")
+            raise Exception(
+                f"Max atoms in one structure {max(self.node_num)} > batch_size {self.batch_size}"
+            )
 
     def __iter__(self) -> Iterator[List[int]]:
         batch = []
@@ -177,9 +217,7 @@ class MaxNodeSampler(Sampler):
 
 class MaxEdgeSampler(Sampler):
 
-    def __init__(self, 
-                 sampler: Sampler[int], 
-                 batch_size: int) -> None:
+    def __init__(self, sampler: Sampler[int], batch_size: int) -> None:
 
         self.sampler = sampler
         self.batch_size = batch_size
@@ -187,8 +225,9 @@ class MaxEdgeSampler(Sampler):
         for idx in self.sampler:
             self.edge_num[idx] = self.sampler.data_source[idx]["n_edges"]
         if max(self.edge_num) > self.batch_size:
-            print("!!!!!!!", self.sampler.data_source[idx])
-            raise Exception(f"Max edge in one structure {max(self.edge_num)} > batch_size {self.batch_size}")
+            raise Exception(
+                f"Max edge in one structure {max(self.edge_num)} > batch_size {self.batch_size}"
+            )
 
     def __iter__(self) -> Iterator[List[int]]:
         batch = []
