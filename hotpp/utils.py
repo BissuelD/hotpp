@@ -154,6 +154,7 @@ class EnvPara:
     CONV_MODE = "node_j"
     ELEMENTS = [-1]
     EDGE_UPDATE_MODE = "no_update"
+    SHARE_RADIAL_PARA = True
 
 
 def expand_para(para: Union[int, List[int]], n: int):

@@ -57,6 +57,7 @@ DefaultPara = {
     },
     "Model": {
         "net": "miao",
+        "shareRadialPara": False,
         "convMode": "node_j",
         "eleMode": "none",
         "updateEdge": "no_update",
@@ -442,6 +443,7 @@ def main(
     EnvPara.ELEMENT_MODE = p_dict["Model"]["eleMode"]
     EnvPara.CONV_MODE = p_dict["Model"]["convMode"]
     EnvPara.EDGE_UPDATE_MODE = p_dict["Model"]["updateEdge"]
+    EnvPara.SHARE_RADIAL_PARA = p_dict["Model"]["shareRadialPara"]
     if p_dict["precision"] == "double":
         EnvPara.FLOAT_PRECISION = torch.float64
 
@@ -510,9 +512,9 @@ def main(
 
     if load_checkpoint is not None:
         log.info(f"Load checkpoints from {load_checkpoint}")
-        trainer.fit(lit_model, datamodule=dataset, ckpt_path=load_checkpoint)
+        trainer.fit(lit_model, train_dataloaders=dataset.train_dataloader(), val_dataloaders=dataset.val_dataloader(), ckpt_path=load_checkpoint)
     else:
-        trainer.fit(lit_model, datamodule=dataset)
+        trainer.fit(lit_model, train_dataloaders=dataset.train_dataloader(), val_dataloaders=dataset.val_dataloader())
 
 
 if __name__ == "__main__":

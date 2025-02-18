@@ -65,6 +65,12 @@ class RadialLayer(nn.Module):
         else:
             return self.radial(d) * self.cutoff_fn(d)
 
+    def copy(self, deepcopy=True):
+        if deepcopy:
+            return self.replicate()
+        else:
+            return self
+
     def replicate(self):
         raise NotImplementedError(f"{self.__class__.__name__} must have 'replicate'!")
 

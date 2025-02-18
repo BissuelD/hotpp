@@ -28,7 +28,7 @@ class PtData(AtomsDataset):
         else:
             self.collect_data, self.collated_number, self.meta_data = ptdata
         self.indices = indices
-        self.data_list = [None] * len(self)
+        self.data_list = [None] * self.meta_data["n_data"]
 
     def __len__(self):
         if self.indices is None:

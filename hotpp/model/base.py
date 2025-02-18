@@ -123,7 +123,10 @@ class AtomicModule(nn.Module):
             # for torch.jit.script
             dE_dl = grads[required_derivatives.index('scaling')]
             if dE_dl is not None:
-                batch_data['virial_p'] = -dE_dl
+                if 'virial' in properties:
+                    batch_data['virial_p'] = -dE_dl
+                if 'stress' in properties:
+                    batch_data['stress_p'] = dE_dl / batch_data['volume'][:, None, None]
             #######################################
         if 'spin_torques' in properties:
             dE_dS = grads[required_derivatives.index('spin')]

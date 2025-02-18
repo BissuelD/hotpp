@@ -270,7 +270,7 @@ class MiaoNet(AtomicModule):
             [
                 MiaoBlock(
                     activate_fn=activate_fn,
-                    radial_fn=self.radial_fn.replicate(),
+                    radial_fn=self.radial_fn.copy(deepcopy=not EnvPara.SHARE_RADIAL_PARA),
                     # Use factory method, so the radial_fn in each layer are different
                     max_r_way=max_r_way[i],
                     max_in_way=max_in_way[i],

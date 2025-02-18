@@ -61,7 +61,7 @@ def main(
         for key in number_list
     }
     meta_data = {"cutoff": cutoff, "n_data": len(dataset)}
-    torch.save((collated_data, collated_number, meta_data), f"{datapath}-{cutoff}.pt")
+    torch.save((collated_data, collated_number, meta_data), f"{datapath}-{'-'.join(properties)}-{cutoff}.pt")
 
 
 if __name__ == "__main__":

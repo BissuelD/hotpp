@@ -2,7 +2,8 @@ from ase.io import read
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from ..data import ASEData, ASEDBData, atoms_collate_fn, RevisedMD17, DeePMDData
+from ..data import get_dataset
+from ..data.utils import atoms_collate_fn 
 from tqdm import tqdm
 import os
 
@@ -26,41 +27,22 @@ def eval(model, data_loader, properties, device):
     return None
 
 
-def main(*args, modelfile='model.pt', indices=None, device='cpu', datafile='data.traj',
-         format=None, properties=["energy", "forces"], spin=False,
+def main(*args, modelfile='model.pt', indices=None, device='cpu', datapath='data.traj',
+         datatype="ase", properties=["energy", "forces"], spin=False,
          batchsize=32, num_workers=4, pin_memory=True,
          **kwargs):
+    if indices is not None:
+        indices = np.loadtxt(indices, dtype=int)
     model = torch.load(modelfile, map_location=device)
     model.eval()
     cutoff = float(model.cutoff.detach().cpu().numpy())
-    if indices is not None:
-        indices = np.loadtxt(indices, dtype=int)
-    if format == "rmd17":
-        dataset = RevisedMD17(root=os.path.dirname(datafile),
-                              name=os.path.basename(datafile),
-                              indices=indices,
-                              cutoff=cutoff)
-    elif format == "dpmd":
-        dataset = DeePMDData(
-                path_list=[datafile],
-                properties=properties,
-                cutoff=cutoff,
-                spin=spin,
-                )
-    else:
-        if '.db' in datafile:
-            dataset = ASEDBData(datapath=datafile,
-                                indices=indices,
-                                properties=properties,
-                                cutoff=cutoff,
-                                spin=spin)
-        else:
-            frames = read(datafile, index=':', format=format)
-            dataset = ASEData(frames=frames,
-                              indices=indices,
-                              cutoff=cutoff,
-                              properties=properties,
-                              spin=spin)
+
+    dataset = get_dataset(cutoff=cutoff,
+                           datatype=datatype,
+                           datapath=datapath,
+                           properties=properties,
+                           spin=spin,
+                           indices=indices)
 
     data_loader = DataLoader(dataset,
                              batch_size=batchsize,

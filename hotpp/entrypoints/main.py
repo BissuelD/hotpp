@@ -73,9 +73,9 @@ def parse_args():
         "--device", choices=["cuda", "cpu"], default="cpu", help="device"
     )
     parser_eval.add_argument(
-        "-d", "--datafile", type=str, default="data.traj", help="dataset"
+        "-d", "--datapath", type=str, default="data.traj", help="dataset"
     )
-    parser_eval.add_argument("-f", "--format", type=str, default=None, help="format")
+    parser_eval.add_argument("--datatype", type=str, default=None, help="datatype")
     parser_eval.add_argument(
         "-b", "--batchsize", type=int, default=32, help="batchsize"
     )

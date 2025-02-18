@@ -7,7 +7,7 @@ from .utils import expand_to
 class Loss:
 
     atom_prop = ["forces", "spin_torques", "direct_forces", "peratom_tensor", "peratom_l3_tensor"]
-    structure_prop = ["energy", "virial", "dipole", "polarizability", "l3_tensor"]
+    structure_prop = ["energy", "virial", "dipole", "polarizability", "l3_tensor", "stress"]
 
     def __init__(self,
                  weight  : Dict[str, float]={"energy": 1.0, "forces": 1.0},
@@ -134,6 +134,12 @@ class MACEHuberLoss(Loss):
                     batch_data['virial_t'] / batch_data['n_atoms'].view(-1, 1, 1),
                     reduction="mean", delta=self.huber_delta
                     )
+            elif prop == "stress":
+                loss["stress"] = self.loss_fn(
+                        batch_data['stress_p'],
+                        batch_data['stress_t'],
+                        reduction="mean",
+                        delta=self.huber_delta)
             total_loss += loss[prop] * self.weight[prop]
         if verbose:
             return total_loss, loss

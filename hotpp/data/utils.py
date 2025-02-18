@@ -77,33 +77,40 @@ class AtomsDataset(Dataset, abc.ABC):
                 except:
                     pass
 
-        if 'virial' in properties:
+        if 'virial' in properties or 'stress' in properties:
+            if 'stress' in properties:
+                data["volume"] = torch.tensor([atoms.get_volume()], dtype=EnvPara.FLOAT_PRECISION)
             data["scaling"] = torch.eye(dim, dtype=EnvPara.FLOAT_PRECISION).view(
                 1, dim, dim
             )
-            if 'virial' not in atoms.info:
-                if 'stress' not in atoms.info:
-                    try:
-                        atoms.info['stress'] = atoms.get_stress()
-                    except:
-                        pass
-                if 'stress' in atoms.info:
-                    stress = np.array(atoms.info['stress'])
-                    if stress.shape == (6,):
-                        stress = np.array(
-                            [
-                                [stress[0], stress[5], stress[4]],
-                                [stress[5], stress[1], stress[3]],
-                                [stress[4], stress[3], stress[2]],
-                            ]
-                        )
+            if 'stress' not in atoms.info:
+                try:
+                    atoms.info['stress'] = atoms.get_stress()
+                except:
+                    pass
+            if 'stress' in atoms.info:
+                stress = np.array(atoms.info['stress'])
+                if stress.shape == (6,):
+                    stress = np.array(
+                        [
+                            [stress[0], stress[5], stress[4]],
+                            [stress[5], stress[1], stress[3]],
+                            [stress[4], stress[3], stress[2]],
+                        ]
+                    )
+                atoms.info['stress'] = stress
+                if 'virial' not in atoms.info and 'virial' in properties:
                     atoms.info['virial'] = -atoms.get_volume() * stress
+            if 'virial' in atoms.info and 'stress' not in atoms.info and 'stress' in properties:
+                atoms.info['stress'] = -atoms.info['virial'] / atoms.get_volume()
+
 
         padding_shape = {
             'site_energy': (len(atoms)),
             'energy': (1),
             'forces': (len(atoms), dim),
             'virial': (1, dim, dim),
+            'stress': (1, dim, dim),
             'dipole': (1, dim),
             'polarizability': (1, dim, dim),
             'spin_torques': (len(atoms), dim),
