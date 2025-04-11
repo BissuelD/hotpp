@@ -42,8 +42,10 @@ class Loss:
                             prop       : str,
                             ) -> torch.Tensor:
         n_atoms = expand_to(batch_data['n_atoms'], len(batch_data[f'{prop}_p'].shape))
-        return self.loss_fn(batch_data[f'{prop}_p'] / n_atoms,
-                            batch_data[f'{prop}_t'] / n_atoms)
+        return self.loss_fn(batch_data[f'{prop}_p'],
+                            batch_data[f'{prop}_t'])
+        # return self.loss_fn(batch_data[f'{prop}_p'] / n_atoms,
+        #                     batch_data[f'{prop}_t'] / n_atoms)
 
 
 class ForceScaledLoss(Loss):

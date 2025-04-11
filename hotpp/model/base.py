@@ -49,8 +49,19 @@ class AtomicModule(nn.Module):
             polar_diag = _scatter_add(output_tensors['l3_tensor_diag'], batch_data['batch'])
             polar_off_diagonal = _scatter_add(output_tensors['l3_tensor_offdiag'], batch_data['batch'])
             polar = expand_to(polar_diag, 4, -1) * expand_to(torch.eye(3, device=polar_diag.device), 4, 0) + polar_off_diagonal
-            polar = (polar + polar.permute(0, 1, 3, 2) + polar.permute(0, 2, 1, 3) + 
-                     polar.permute(0, 2, 3, 1) + polar.permute(0, 3, 1, 2) + polar.permute(0, 3, 2, 1)) / 6
+            # polar = (
+            #     polar + 
+            #     polar.permute(0, 1, 3, 2) + 
+            #     polar.permute(0, 2, 1, 3) + 
+            #     polar.permute(0, 2, 3, 1) + 
+            #     polar.permute(0, 3, 1, 2) + 
+            #     polar.permute(0, 3, 2, 1)
+            # ) / 6
+            #!DB, to only ensure symmetries we would want in beta
+            polar = (  #!DB
+                polar +  #!DB
+                polar.permute(0, 1, 3, 2)  #!DB
+            ) / 2  #!DB
             batch_data['l3_tensor_p'] = polar
         if 'peratom_l3_tensor_diag' in output_tensors:
             polar_diag = output_tensors['peratom_l3_tensor_diag']

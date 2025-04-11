@@ -33,7 +33,7 @@ Train:
   targetProp: ["polarizability"] 
   weight: [1.0]
   amsGrad: True                          # use amsGrad  
-  maxEpoch: 10
+  maxEpoch: 1000
   maxStep: 10000000
   evalEpochInterval: 1
   evalStepInterval: 1.0

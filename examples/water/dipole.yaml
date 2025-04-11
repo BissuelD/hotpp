@@ -4,10 +4,11 @@ device: 'cuda'
 Data:
   type: ase
   path: data 
-  trainBatch: 16
-  testBatch: 16
+  trainBatch: 32
+  testBatch: 32
   trainSet: train.xyz
   testSet: test.xyz
+  numWorkers: 16
 Model:
   nLayer: 4
   activateFn: silu
@@ -30,7 +31,7 @@ Train:
   targetProp: ["dipole"] 
   weight: [1.0]
   amsGrad: True                          # use amsGrad  
-  maxEpoch: 10
+  maxEpoch: 1000
   evalStepInterval: 1.0
   evalEpochInterval: 1
   emaDecay: 0.0                          # use ema

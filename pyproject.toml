@@ -1,0 +1,40 @@
+[project]
+name = "hotpp"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "ase>=3.24.0",
+    "lightning>=2.5.0.post0",
+    "numpy>=2.2.3",
+    "pyyaml>=6.0.2",
+    "setuptools>=76.0.0",
+    "tensorboard>=2.19.0",
+    "torch==2.4",
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+description="MiaoNet: Moment tensor InterAggregate Operation Net"
+authors = [
+    { name = "Jian Sun" },
+    { name = "Junjie Wang" },
+    { name = "Yong Wang" },
+    { name = "Haoting Zhang" },
+    { name = "Ziyang Yang" },
+    { name = "Zhixin Liang" },
+    { name = "Jiuyang Shi" },
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "ipython>=8.34.0",
+]
+
+[build-system]
+requires = [
+    "setuptools==76.0.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+hotpp = "hotpp.entrypoints.main:main"
