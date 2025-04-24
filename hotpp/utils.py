@@ -188,6 +188,35 @@ def _scatter_add(
     y = tmp.index_add(dim, idx_i, x)
     return y
 
+@torch.jit.script
+def _scatter_add_only_n_first(
+    x: torch.Tensor, idx_i: torch.Tensor, n: int = 3, dim_size: Optional[int] = None, dim: int = 0
+) -> torch.Tensor:
+    #! Extracting the data for the n-first atoms in the box
+    _, count = torch.unique_consecutive(idx_i, return_counts=True)
+    idx_start = count.cumsum(0)
+    idx_end = idx_start + n
+    x_keep = torch.cat(
+        [
+            x[start:end]
+            for start, end in zip(idx_start[:-1], idx_end[:-1])
+        ],
+    )
+    i_keep = torch.cat(
+        [
+            idx_i[start:end]
+            for start, end in zip(idx_start[:-1], idx_end[:-1])
+        ],
+    )
+    #! Back to "normal" functionning
+    shape = list(x_keep.shape)
+    if dim_size is None:
+        dim_size = i_keep.max() + 1
+    shape[dim] = dim_size
+    tmp = torch.zeros(shape, dtype=x_keep.dtype, device=x_keep.device)
+    y = tmp.index_add(dim, i_keep, x_keep)
+    return y
+
 
 def progress_bar(i: int, n: int, interval: int = 100):
     if i % interval == 0:
