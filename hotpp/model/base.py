@@ -30,13 +30,13 @@ class AtomicModule(nn.Module):
         output_tensors = self.calculate(batch_data)
         #######################################
         if 'dipole' in output_tensors:
-            # batch_data['dipole_p'] = _scatter_add(output_tensors['dipole'], batch_data['batch'])
-            batch_data['dipole_p'] = _scatter_add_only_n_first(output_tensors['dipole'], batch_data['batch'], n=3)
+            batch_data['dipole_p'] = _scatter_add(output_tensors['dipole'], batch_data['batch'])
+            # batch_data['dipole_p'] = _scatter_add_only_n_first(output_tensors['dipole'], batch_data['batch'], n=3)
         if 'polar_diag' in output_tensors:
-            # polar_diag = _scatter_add(output_tensors['polar_diag'], batch_data['batch'])
-            polar_diag = _scatter_add_only_n_first(output_tensors['polar_diag'], batch_data['batch'], n=3)
-            # polar_off_diagonal = _scatter_add(output_tensors['polar_off_diagonal'], batch_data['batch'])
-            polar_off_diagonal = _scatter_add_only_n_first(output_tensors['polar_off_diagonal'], batch_data['batch'], n=3)
+            polar_diag = _scatter_add(output_tensors['polar_diag'], batch_data['batch'])
+            # polar_diag = _scatter_add_only_n_first(output_tensors['polar_diag'], batch_data['batch'], n=3)
+            polar_off_diagonal = _scatter_add(output_tensors['polar_off_diagonal'], batch_data['batch'])
+            # polar_off_diagonal = _scatter_add_only_n_first(output_tensors['polar_off_diagonal'], batch_data['batch'], n=3)
             polar = polar_off_diagonal + polar_off_diagonal.transpose(1, 2)
             polar[:, 0, 0] += polar_diag
             polar[:, 1, 1] += polar_diag
@@ -49,10 +49,10 @@ class AtomicModule(nn.Module):
             polar[:, 2, 2] += output_tensors['peratom_tensor_diag']
             batch_data['peratom_tensor'] = polar
         if 'l3_tensor_diag' in output_tensors:
-            # polar_diag = _scatter_add(output_tensors['l3_tensor_diag'], batch_data['batch'])
-            polar_diag = _scatter_add_only_n_first(output_tensors['l3_tensor_diag'], batch_data['batch'], n=3)
-            # polar_off_diagonal = _scatter_add(output_tensors['l3_tensor_offdiag'], batch_data['batch'])
-            polar_off_diagonal = _scatter_add_only_n_first(output_tensors['l3_tensor_offdiag'], batch_data['batch'], n=3)
+            polar_diag = _scatter_add(output_tensors['l3_tensor_diag'], batch_data['batch'])
+            # polar_diag = _scatter_add_only_n_first(output_tensors['l3_tensor_diag'], batch_data['batch'], n=3)
+            polar_off_diagonal = _scatter_add(output_tensors['l3_tensor_offdiag'], batch_data['batch'])
+            # polar_off_diagonal = _scatter_add_only_n_first(output_tensors['l3_tensor_offdiag'], batch_data['batch'], n=3)
             polar = expand_to(polar_diag, 4, -1) * expand_to(torch.eye(3, device=polar_diag.device), 4, 0) + polar_off_diagonal
             # polar = (
             #     polar + 

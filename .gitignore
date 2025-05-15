@@ -16,6 +16,7 @@ __pycache__/
 # Examples
 examples/water-*
 examples/*/*
+examples/lab*
 !examples/*/data
 !examples/*/input.yaml
 !examples/*/*.ipynb
