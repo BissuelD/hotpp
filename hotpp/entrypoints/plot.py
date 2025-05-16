@@ -11,8 +11,8 @@ def plot_vec(prop):
     n = np.load("n_atoms.npy")
     while len(n.shape) < len(x.shape):
         n = n[..., None]
-    x = x / n
-    y = y / n
+    x = x
+    y = y
     fig, ax = plt.subplots(1, 3, figsize=(17, 7))
     fig.subplots_adjust(left=0.05, right=0.95)
     title = ["x", "y", "z"]
@@ -59,8 +59,8 @@ def plot_matrix(prop):
     n = np.load("n_atoms.npy")
     while len(n.shape) < len(x.shape):
         n = n[..., None]
-    x = x #/ n
-    y = y #/ n
+    x = x
+    y = y
     fig, ax = plt.subplots(3, 3, figsize=(20,20))
     fig.subplots_adjust(left=0.05, right=0.95)
     
@@ -109,8 +109,8 @@ def plot_tensor_3d(prop):
     n = np.load("n_atoms.npy")
     while len(n.shape) < len(x.shape):
         n = n[..., None]
-    x = x #/ n
-    y = y #/ n
+    x = x
+    y = y
     fig, ax = plt.subplots(3, 9, figsize=(65, 20))
     # smaller margin on the right and left
     fig.subplots_adjust(left=0.05, right=0.95)
