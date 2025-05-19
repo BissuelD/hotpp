@@ -11,8 +11,6 @@ def plot_vec(prop):
     n = np.load("n_atoms.npy")
     while len(n.shape) < len(x.shape):
         n = n[..., None]
-    x = x
-    y = y
     fig, ax = plt.subplots(1, 3, figsize=(17, 7))
     fig.subplots_adjust(left=0.05, right=0.95)
     title = ["x", "y", "z"]
@@ -59,8 +57,6 @@ def plot_matrix(prop):
     n = np.load("n_atoms.npy")
     while len(n.shape) < len(x.shape):
         n = n[..., None]
-    x = x
-    y = y
     fig, ax = plt.subplots(3, 3, figsize=(20,20))
     fig.subplots_adjust(left=0.05, right=0.95)
     
@@ -109,8 +105,6 @@ def plot_tensor_3d(prop):
     n = np.load("n_atoms.npy")
     while len(n.shape) < len(x.shape):
         n = n[..., None]
-    x = x
-    y = y
     fig, ax = plt.subplots(3, 9, figsize=(65, 20))
     # smaller margin on the right and left
     fig.subplots_adjust(left=0.05, right=0.95)
@@ -155,6 +149,69 @@ def plot_tensor_3d(prop):
                                     "RMSE: {:.3f}\nMAE: {:.3f}\nR2: {:.3f}".format(rmse, mae, r2),
                                     fontsize=18)
     plt.savefig('{}.png'.format(prop))
+    
+def plot_tensor_3d_sym(prop):
+    """"Plots a 3 by 3 by 3 tensor property (e.g. hyperpolarizability named l3_tensor) accuracy by taking symmetry into account
+        Namely xxy=xyx, xxz=xzx, yxy=yyx, yxz=zyx, xyy=yyy, xyz=xzy, yyz=yzy, zxy=zyx, zxz=zzx.
+        So there are 18 unique components in total instead of 27.
+    """
+    x = np.load("target_{}.npy".format(prop))
+    y = np.load("output_{}.npy".format(prop))
+    n = np.load("n_atoms.npy")
+    while len(n.shape) < len(x.shape):
+        n = n[..., None]
+    fig, ax = plt.subplots(3, 6, figsize=(40, 20))
+    # smaller margin on the right and left
+    fig.subplots_adjust(left=0.05, right=0.95)
+    title = [["xxx", "xxy=xyx", "xxz=xzx", "xyy", "xyz=xzy", "xzz"],
+             ["yxx", "yxy=yyx", "yxz=yzx", "yyy", "yyz=yzy", "yzz"],
+             ["zxx", "zxy=zyx", "zxz=zzx", "zyy", "zyz=zzy", "zzz"]]
+    rmse = np.sqrt(np.mean((x - y) ** 2))
+    mae = np.mean(np.abs(x - y))
+    r2 = 1 - np.sum((x - y) ** 2) / np.sum((x - np.mean(x)) ** 2)
+    fig.suptitle("HotPP {0} vs DFT {0} (accounting for symmetries)".format(prop), fontsize=30)
+    plt.figtext(0.5, 0.01, "Global metrics:    RMSE={:.3f},    MAE={:.3f},    R2={:.3f}".format(rmse, mae, r2),
+                ha='center', fontsize=25, color="teal")
+    for i in range(3):
+        col = 0
+        for j in range(3):
+            for k in range(3):
+                if (j == 1 and k == 0) or (j == 2 and k == 0) or (j == 2 and k == 1) :
+                    continue
+                ax[i, col].set_aspect(1)
+                # title
+                ax[i, col].set_title(title[i][col], fontsize=18)
+                # axis
+                ymajorFormatter = ticker.FormatStrFormatter('%.1f') 
+                xmajorFormatter = ticker.FormatStrFormatter('%.1f') 
+                ax[i, col].xaxis.set_major_formatter(xmajorFormatter)
+                ax[i, col].yaxis.set_major_formatter(ymajorFormatter)
+                ax[i, col].set_xlabel('DFT  {}'.format(prop), fontsize=18)
+                ax[i, col].set_ylabel('HotPP {}'.format(prop), fontsize=18)
+                ax[i, col].spines['bottom'].set_linewidth(3)
+                ax[i, col].spines['left'].set_linewidth(3)
+                ax[i, col].spines['right'].set_linewidth(3)
+                ax[i, col].spines['top'].set_linewidth(3)
+                ax[i, col].tick_params(labelsize=16)
+                # scatter
+                ax[i, col].scatter(x[..., i, j, k], y[..., i, j, k])
+                # diagonal line
+                s = min(np.min(x[..., i, j, k]), np.min(y[..., i, j, k]))
+                e = max(np.max(x[..., i, j, k]), np.max(y[..., i, j, k]))
+                rmse = np.sqrt(np.mean((x[..., i, j, k] - y[..., i, j, k]) ** 2))
+                mae = np.mean(np.abs(x[..., i, j, k] - y[..., i, j, k]))
+                r2 = 1 - np.sum((x[..., i, j, k] - y[..., i, j, k]) ** 2) / np.sum((x[..., i, j, k] - np.mean(x[..., i, j, k])) ** 2)
+                ax[i, col].plot([s, e], [s, e], color='black',linewidth=3,linestyle='--',)
+                ax[i, col].text(0.85 * s + 0.05 * e,
+                                0.25 * s + 0.85 * e,
+                                "RMSE: {:.3f}\nMAE: {:.3f}\nR2: {:.3f}".format(rmse, mae, r2),
+                                fontsize=18)
+                col += 1
+                if col == 6:
+                    col = 0
+                    break
+    plt.savefig('{}_sym.png'.format(prop))
+    
 
 def plot_prop(prop):
     if "per_" in prop:
@@ -178,6 +235,7 @@ def plot_prop(prop):
         return None
     if prop == "l3_tensor" :
         plot_tensor_3d(prop)
+        plot_tensor_3d_sym(prop)
         return None
     
     x = x.reshape(-1)
