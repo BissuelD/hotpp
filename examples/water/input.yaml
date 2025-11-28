@@ -3,19 +3,17 @@ seed: 0
 device: 'cuda'
 Data:
   type: ase
-  mean: 0.7
   path: data 
   trainBatch: 16
   testBatch: 16
   trainSet: train.xyz
   testSet: test.xyz
-  numWorkers: 8
-  pinMemory: True
+  numWorkers: 16
 Model:
-  nLayer: 4
+  nLayer: 3
   activateFn: silu
-  nEmbedding: 64
-  nHidden: 64
+  nEmbedding: 16
+  nHidden: 16
   maxRWay: 2
   maxOutWay: 2
   CutoffLayer:
@@ -24,20 +22,18 @@ Model:
   RadialLayer:
     #type: bessel
     type: besselMLP
-    nBasis: 8
-    nHidden: [64, 64]
+    nBasis: 16
+    nHidden: [16, 16]
     activateFn: silu
 Train:
-  warmupSteps: 100
+  warmupSteps: 20
   allowMissing: False
-  targetProp: ["polarizability"] 
-  weight: [1.0]
+  targetProp: ["dipole", "polarizability"] 
+  weight: [1.0, 1.0]
   amsGrad: True                          # use amsGrad  
-  maxEpoch: 1000
-  maxStep: 10000000
-  evalEpochInterval: 1
+  maxEpoch: 100
   evalStepInterval: 1.0
-  logInterval: 20
+  evalEpochInterval: 1
   emaDecay: 0.0                          # use ema
   Optimizer: 
     type: AdamW
@@ -47,4 +43,4 @@ Train:
   LrScheduler:
     type: reduceOnPlateau
     lrFactor: 0.8
-    patience: 10
+    patience: 500    

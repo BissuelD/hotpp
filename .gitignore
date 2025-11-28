@@ -25,6 +25,7 @@ examples/lab*
 !examples/carbon/force_constant_dft.npy
 # water
 !examples/water/lammps-infer.pt
+!examples/water
 # C extensions
 *.so
 
