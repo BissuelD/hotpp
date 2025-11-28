@@ -69,6 +69,10 @@ DefaultPara = {
         "maxNBody": 3,
         "nHidden": 64,
         "targetWay": {0: 'site_energy'},
+        # Optional: limit per-structure reduction to first N atoms.
+        # None -> use all atoms (default behavior)
+        # Integer >0 -> use only first N atoms when aggregating dipole/polarizability
+        "aggregateFirstN": None,
         "CutoffLayer": {
             "type": "poly",
             "p": 5,
@@ -414,7 +418,11 @@ def get_model(p_dict, elements, mean, ground_energy, std, n_neighbor):
             embedding_layer=emb, cutoff_fn=cut_fn, k_max=model_dict['Repulsion']
         )
 
-    return MultiAtomicModule(module_dict)
+    multi = MultiAtomicModule(module_dict)
+    # Propagate optional aggregation truncation parameter
+    if 'aggregateFirstN' in model_dict:
+        multi.aggregateFirstN = model_dict['aggregateFirstN']
+    return multi
 
 
 def main(

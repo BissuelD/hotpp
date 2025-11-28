@@ -17,6 +17,8 @@ Model:
   nHidden: 64
   maxRWay: 2
   maxOutWay: 2
+  # Optional: limit aggregation to first N atoms per structure (None -> use all)
+  aggregateFirstN: null
   CutoffLayer:
     type: poly
     p: 5

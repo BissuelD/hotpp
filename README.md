@@ -8,6 +8,7 @@
 * Building machine learning potentials for molecular and periodic systems;
 * Learning dipole moments and polarizability tensors;
 * Interface to LAMMPS and ASE;
+* Optional first-N atom aggregation for dipole/polarizability (Model.aggregateFirstN)
 
 
 # Documentation
@@ -56,6 +57,14 @@ You can use
 $ hotpp -v
 ```
 to check if you have installed successfully
+
+## Optional First-N Aggregation
+You can limit reductions (dipole, polarizability) to the first N atoms in each structure by adding in your input YAML under `Model`:
+```yaml
+Model:
+	aggregateFirstN: 3  # only sum first 3 atomic contributions
+```
+Set to `null` (or omit) to use all atoms.
 
 ## Update
 If you installed by pip, use:

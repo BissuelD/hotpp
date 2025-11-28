@@ -6,6 +6,11 @@ from ..utils import _scatter_add, _scatter_add_only_n_first, expand_to, add_scal
 
 class AtomicModule(nn.Module):
 
+    def __init__(self) -> None:
+        super().__init__()
+        # If not None and >0, truncate per-structure reductions to first N atoms
+        self.aggregateFirstN: Optional[int] = None
+
     def forward(self,
                 batch_data   : Dict[str, torch.Tensor],
                 properties   : Optional[List[str]]=None,
@@ -30,13 +35,23 @@ class AtomicModule(nn.Module):
         output_tensors = self.calculate(batch_data)
         #######################################
         if 'dipole' in output_tensors:
-            batch_data['dipole_p'] = _scatter_add(output_tensors['dipole'], batch_data['batch'])
-            # batch_data['dipole_p'] = _scatter_add_only_n_first(output_tensors['dipole'], batch_data['batch'], n=3)
+            if self.aggregateFirstN is not None and self.aggregateFirstN > 0:
+                batch_data['dipole_p'] = _scatter_add_only_n_first(
+                    output_tensors['dipole'], batch_data['batch'], n=int(self.aggregateFirstN)
+                )
+            else:
+                batch_data['dipole_p'] = _scatter_add(output_tensors['dipole'], batch_data['batch'])
         if 'polar_diag' in output_tensors:
-            polar_diag = _scatter_add(output_tensors['polar_diag'], batch_data['batch'])
-            # polar_diag = _scatter_add_only_n_first(output_tensors['polar_diag'], batch_data['batch'], n=3)
-            polar_off_diagonal = _scatter_add(output_tensors['polar_off_diagonal'], batch_data['batch'])
-            # polar_off_diagonal = _scatter_add_only_n_first(output_tensors['polar_off_diagonal'], batch_data['batch'], n=3)
+            if self.aggregateFirstN is not None and self.aggregateFirstN > 0:
+                polar_diag = _scatter_add_only_n_first(
+                    output_tensors['polar_diag'], batch_data['batch'], n=int(self.aggregateFirstN)
+                )
+                polar_off_diagonal = _scatter_add_only_n_first(
+                    output_tensors['polar_off_diagonal'], batch_data['batch'], n=int(self.aggregateFirstN)
+                )
+            else:
+                polar_diag = _scatter_add(output_tensors['polar_diag'], batch_data['batch'])
+                polar_off_diagonal = _scatter_add(output_tensors['polar_off_diagonal'], batch_data['batch'])
             polar = polar_off_diagonal + polar_off_diagonal.transpose(1, 2)
             polar[:, 0, 0] += polar_diag
             polar[:, 1, 1] += polar_diag

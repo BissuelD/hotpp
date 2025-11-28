@@ -190,25 +190,49 @@ def _scatter_add(
 
 @torch.jit.script
 def _scatter_add_only_n_first(
-    x: torch.Tensor, idx_i: torch.Tensor, n: int = 3, dim_size: Optional[int] = None, dim: int = 0
+    x: torch.Tensor, 
+    idx_i: torch.Tensor, 
+    n: int = 3, 
+    dim_size: Optional[int] = None, 
+    dim: int = 0
 ) -> torch.Tensor:
-    #! Extracting the data for the n-first atoms in the box
+    """
+    Scatter-add operation keeping only the first n atoms per box/molecule.
+    
+    Args:
+        x: Per-atom contributions [n_atoms, ...]
+        idx_i: Box/molecule index for each atom [n_atoms] (must be sorted!)
+        n: Number of atoms to keep per box
+        dim_size: Number of boxes (default: max(idx_i)+1)
+        dim: Dimension along which to scatter (default: 0)
+    
+    Returns:
+        Summed contributions from first n atoms per box [n_boxes, ...]
+    """
+    # Count atoms per box
     _, count = torch.unique_consecutive(idx_i, return_counts=True)
-    idx_start = count.cumsum(0)
-    idx_end = idx_start + n
-    x_keep = torch.cat(
-        [
-            x[start:end]
-            for start, end in zip(idx_start[:-1], idx_end[:-1])
-        ],
-    )
-    i_keep = torch.cat(
-        [
-            idx_i[start:end]
-            for start, end in zip(idx_start[:-1], idx_end[:-1])
-        ],
-    )
-    #! Back to "normal" functionning
+    
+    # Compute start indices correctly
+    idx_start = torch.cat([
+        torch.tensor([0], dtype=count.dtype, device=count.device), 
+        count.cumsum(0)[:-1]
+    ])
+    
+    # Take only first n atoms per box
+    idx_end = torch.minimum(idx_start + n, count.cumsum(0))  # Don't exceed box size
+    
+    # Extract first n atoms for each box
+    x_keep = torch.cat([
+        x[start:end]
+        for start, end in zip(idx_start, idx_end)
+    ])
+    
+    i_keep = torch.cat([
+        idx_i[start:end]
+        for start, end in zip(idx_start, idx_end)
+    ])
+    
+    # Perform scatter-add
     shape = list(x_keep.shape)
     if dim_size is None:
         dim_size = i_keep.max() + 1
