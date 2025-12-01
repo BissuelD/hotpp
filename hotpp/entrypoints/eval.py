@@ -32,6 +32,11 @@ def main(*args, modelfile='model.pt', indices=None, device='cpu', datafile='data
          **kwargs):
     model = torch.load(modelfile, map_location=device)
     model.eval()
+    
+    # Backward compatibility: ensure old models have aggregateFirstN attribute
+    if not hasattr(model, '_aggregateFirstN'):
+        model.register_buffer('_aggregateFirstN', torch.tensor(-1, dtype=torch.long), persistent=True)
+    
     cutoff = float(model.cutoff.detach().cpu().numpy())
     if indices is not None:
         indices = np.loadtxt(indices, dtype=int)

@@ -9,7 +9,20 @@ class AtomicModule(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         # If not None and >0, truncate per-structure reductions to first N atoms
-        self.aggregateFirstN: Optional[int] = None
+        # Register as buffer so it's saved with the model
+        self.register_buffer('_aggregateFirstN', torch.tensor(-1, dtype=torch.long), persistent=True)
+    
+    @property
+    def aggregateFirstN(self) -> Optional[int]:
+        val = int(self._aggregateFirstN.item())
+        return None if val < 0 else val
+    
+    @aggregateFirstN.setter
+    def aggregateFirstN(self, value: Optional[int]) -> None:
+        if value is None:
+            self._aggregateFirstN = torch.tensor(-1, dtype=torch.long, device=self._aggregateFirstN.device)
+        else:
+            self._aggregateFirstN = torch.tensor(value, dtype=torch.long, device=self._aggregateFirstN.device)
 
     def forward(self,
                 batch_data   : Dict[str, torch.Tensor],
