@@ -41,6 +41,11 @@ DefaultPara = {
     "seed": np.random.randint(0, 100000000),
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     "precision": "float",
+    # Optional paths to resume training / fine-tune
+    # loadModel: path to a saved model .pt (torch.save(model)) or Lightning .ckpt
+    # loadCheckpoint: path to a trainer checkpoint for resuming optimizer/scheduler state
+    "loadModel": None,
+    "loadCheckpoint": None,
     "Data": {
         "path": os.getcwd(),
         "trainBatch": 32,
@@ -432,6 +437,10 @@ def main(
     p_dict = DefaultPara
     with open(input_file) as f:
         update_dict(p_dict, yaml.load(f, Loader=yaml.FullLoader))
+
+    # CLI args override YAML; YAML provides defaults otherwise
+    load_model = load_model if load_model is not None else p_dict.get("loadModel")
+    load_checkpoint = load_checkpoint if load_checkpoint is not None else p_dict.get("loadCheckpoint")
     p_dict["outputDir"] = os.path.join(p_dict["workDir"], output_folder)
     if os.path.exists(p_dict["outputDir"]):
         i = 1
@@ -469,7 +478,10 @@ def main(
         yaml.dump(stats, f)
     if load_model is not None and 'ckpt' not in load_model:
         log.info(f"Load model from {load_model}")
-        model = torch.load(load_model)
+        model = torch.load(load_model, map_location=p_dict["device"])
+        # Backward compatibility: ensure aggregateFirstN buffer exists
+        if not hasattr(model, '_aggregateFirstN'):
+            model.register_buffer('_aggregateFirstN', torch.tensor(-1, dtype=torch.long), persistent=True)
     else:
         ## TODO
         # mean and ground energy?
@@ -487,7 +499,7 @@ def main(
         lit_model = LitAtomicModule(model=model, p_dict=p_dict)
 
     if load_checkpoint is not None:
-        ckpt = torch.load(load_checkpoint)
+        ckpt = torch.load(load_checkpoint, map_location=p_dict["device"])
         p_dict["Train"]["maxEpoch"] += ckpt['epoch']
         p_dict["Train"]["maxStep"] += ckpt['global_step']
 
