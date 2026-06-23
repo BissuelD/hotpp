@@ -18,7 +18,7 @@ def eval(model, data_loader, properties, device):
             batch_data = {
                 key: value.to(
                     device,
-                    non_blocking= bool(data_loader.pin_memory and device.type == "cuda"),
+                    non_blocking= bool(data_loader.pin_memory and device == "cuda"),
                 )
                 for key, value in batch_data.items()
             }
