@@ -1,79 +1,113 @@
-from ase.io import read
+import os
+
 import numpy as np
 import torch
+from ase.io import read
 from torch.utils.data import DataLoader
-from ..data import ASEData, ASEDBData, atoms_collate_fn, RevisedMD17, DeePMDData
 from tqdm import tqdm
-import os
+
+from ..data import ASEData, ASEDBData, DeePMDData, RevisedMD17, atoms_collate_fn
 
 
 def eval(model, data_loader, properties, device):
     output = {prop: [] for prop in properties}
     target = {prop: [] for prop in properties}
     n_atoms = []
-    for batch_data in tqdm(data_loader):
-        batch_data = {key: value.to(device) for key, value in batch_data.items()}
-        model(batch_data, properties, create_graph=False)
-        n_atoms.extend(batch_data['n_atoms'].detach().cpu().numpy())
-        for prop in properties:
-            output[prop].extend(batch_data[f'{prop}_p'].detach().cpu().numpy())
-            if f'{prop}_t' in batch_data:
-                target[prop].extend(batch_data[f'{prop}_t'].detach().cpu().numpy())
+    with torch.inference_mode():
+        for batch_data in tqdm(data_loader):
+            batch_data = {
+                key: value.to(
+                    device,
+                    non_blocking= bool(data_loader.pin_memory and device.type == "cuda"),
+                )
+                for key, value in batch_data.items()
+            }
+            model(batch_data, properties, create_graph=False)
+            n_atoms.extend(batch_data["n_atoms"].detach().cpu().numpy())
+            for prop in properties:
+                output[prop].extend(batch_data[f"{prop}_p"].detach().cpu().numpy())
+                if f"{prop}_t" in batch_data:
+                    target[prop].extend(batch_data[f"{prop}_t"].detach().cpu().numpy())
     for prop in properties:
-        np.save(f'output_{prop}.npy', np.array(output[prop]))
-        np.save(f'target_{prop}.npy', np.array(target[prop]))
-    np.save('n_atoms.npy', np.array(n_atoms))
-    return None
+        np.save(f"output_{prop}.npy", np.array(output[prop]))
+        np.save(f"target_{prop}.npy", np.array(target[prop]))
+    np.save("n_atoms.npy", np.array(n_atoms))
 
 
-def main(*args, modelfile='model.pt', indices=None, device='cpu', datafile='data.traj',
-         format=None, properties=["energy", "forces"], spin=False,
-         batchsize=32, num_workers=4, pin_memory=True,
-         **kwargs):
+def main(
+    *args,
+    modelfile="model.pt",
+    indices=None,
+    device="cpu",
+    datafile="data.traj",
+    format=None,
+    properties=["energy", "forces"],
+    spin=False,
+    batchsize=32,
+    num_workers=4,
+    pin_memory=True,
+    **kwargs,
+):
     model = torch.load(modelfile, map_location=device)
     model.eval()
-    
+
     # Backward compatibility: ensure old models have aggregateFirstN attribute
-    if not hasattr(model, '_aggregateFirstN'):
-        model.register_buffer('_aggregateFirstN', torch.tensor(-1, dtype=torch.long), persistent=True)
-    
+    if not hasattr(model, "_aggregateFirstN"):
+        model.register_buffer(
+            "_aggregateFirstN", torch.tensor(-1, dtype=torch.long), persistent=True
+        )
+    # Backward compatibility: ensure old models have l3_tensor_symmetry attribute
+    if not hasattr(model, "_l3_tensor_symmetry"):
+        model.register_buffer(
+            "_l3_tensor_symmetry", torch.tensor(0, dtype=torch.long), persistent=True
+        )
+
     cutoff = float(model.cutoff.detach().cpu().numpy())
     if indices is not None:
         indices = np.loadtxt(indices, dtype=int)
     if format == "rmd17":
-        dataset = RevisedMD17(root=os.path.dirname(datafile),
-                              name=os.path.basename(datafile),
-                              indices=indices,
-                              cutoff=cutoff)
+        dataset = RevisedMD17(
+            root=os.path.dirname(datafile),
+            name=os.path.basename(datafile),
+            indices=indices,
+            cutoff=cutoff,
+        )
     elif format == "dpmd":
         dataset = DeePMDData(
-                path_list=[datafile],
+            path_list=[datafile],
+            properties=properties,
+            cutoff=cutoff,
+            spin=spin,
+        )
+    else:
+        if ".db" in datafile:
+            dataset = ASEDBData(
+                datapath=datafile,
+                indices=indices,
                 properties=properties,
                 cutoff=cutoff,
                 spin=spin,
-                )
-    else:
-        if '.db' in datafile:
-            dataset = ASEDBData(datapath=datafile,
-                                indices=indices,
-                                properties=properties,
-                                cutoff=cutoff,
-                                spin=spin)
+            )
         else:
-            frames = read(datafile, index=':', format=format)
-            dataset = ASEData(frames=frames,
-                              indices=indices,
-                              cutoff=cutoff,
-                              properties=properties,
-                              spin=spin)
+            frames = read(datafile, index=":", format=format)
+            dataset = ASEData(
+                frames=frames,
+                indices=indices,
+                cutoff=cutoff,
+                properties=properties,
+                spin=spin,
+            )
 
-    data_loader = DataLoader(dataset,
-                             batch_size=batchsize,
-                             shuffle=False,
-                             collate_fn=atoms_collate_fn,
-                             num_workers=num_workers,
-                             pin_memory=pin_memory)
+    data_loader = DataLoader(
+        dataset,
+        batch_size=batchsize,
+        shuffle=False,
+        collate_fn=atoms_collate_fn,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+    )
     eval(model, data_loader, properties, device)
+
 
 if __name__ == "__main__":
     main()
