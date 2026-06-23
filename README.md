@@ -1,5 +1,7 @@
 # **HotPP: High order tensor Passing Potential**
 
+This repository is a fork of the [hotPP](https://gitlab.com/bigd4/hotpp) [1] code to allow for various `l3_tensor` symmetries (Kleinmann, intrinsic, none) and aggregation of computed properties for only a subset of atoms in the system.
+
 [![Documentation Status](https://readthedocs.org/projects/hotpp/badge/?version=latest)](https://hotpp.readthedocs.io/en/latest/?badge=latest)
 
 ## Introduction
